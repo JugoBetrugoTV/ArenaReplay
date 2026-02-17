@@ -201,6 +201,7 @@ function ArenaReplay:OnLeaveArena()
     currentMatch = nil
     isInArena = false
     isFighting = false
+    guidCache = {}
 end
 
 ------------------------------------------------------------

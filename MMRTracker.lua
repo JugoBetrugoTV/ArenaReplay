@@ -73,13 +73,13 @@ function MMR:GetBracketData(bracketID)
     if bracketID == 6 or bracketID == 8 then
         if C_PvP and C_PvP.GetRatedSoloShuffleMMR and bracketID == 6 then
             local ok, result = pcall(C_PvP.GetRatedSoloShuffleMMR)
-            if ok and result and not issecretvalue(result) then
+            if ok and result and type(result) == "number" and not issecretvalue(result) then
                 mmr = result
             end
         end
         if C_PvP and C_PvP.GetRatedSoloRBGMMR and bracketID == 8 then
             local ok, result = pcall(C_PvP.GetRatedSoloRBGMMR)
-            if ok and result and not issecretvalue(result) then
+            if ok and result and type(result) == "number" and not issecretvalue(result) then
                 mmr = result
             end
         end
@@ -90,13 +90,13 @@ function MMR:GetBracketData(bracketID)
         local ok, r, seasonPlayed, seasonWon, weeklyPlayed, weeklyWon, _mmr =
             pcall(GetPersonalRatedInfo, bracketID)
         if ok then
-            if r and not issecretvalue(r) then rating = r end
-            if _mmr and not issecretvalue(_mmr) then mmr = _mmr end
-            if seasonPlayed and seasonWon then
-                if not issecretvalue(seasonPlayed) and not issecretvalue(seasonWon) then
-                    wins = seasonWon
-                    losses = seasonPlayed - seasonWon
-                end
+            if r and type(r) == "number" and not issecretvalue(r) then rating = r end
+            if _mmr and type(_mmr) == "number" and not issecretvalue(_mmr) then mmr = _mmr end
+            if seasonPlayed and seasonWon
+                and type(seasonPlayed) == "number" and type(seasonWon) == "number"
+                and not issecretvalue(seasonPlayed) and not issecretvalue(seasonWon) then
+                wins = seasonWon
+                losses = seasonPlayed - seasonWon
             end
         end
     end

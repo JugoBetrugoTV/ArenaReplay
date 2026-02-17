@@ -91,7 +91,7 @@ function AR_PlayerEntity:UpdateHealthText()
         local mode = defaults.healthDisplay or 1
 
         if mode == 1 then
-            local pct = (value / maxVal) * 100
+            local pct = maxVal > 0 and (value / maxVal) * 100 or 0
             txt = string.format("%.1f%%", pct)
         elseif mode == 2 then
             txt = AR.Util:AbbreviateNumber(value) .. " / " .. AR.Util:AbbreviateNumber(maxVal)
@@ -113,12 +113,9 @@ function AR_PlayerEntity:AddAura(spellID, auraType, duration)
     local aura = AR_Aura:New(range, spellID, auraType, #target, duration)
     self:SetAura(aura, spellID, auraType)
 
-    -- Trim old auras if too many
-    if #target > C.MAX_AURAS_VISIBLE then
-        for k, v in pairs(target) do
-            self:RemoveAura(v.spellID, auraType)
-            break
-        end
+    -- Trim oldest aura if too many
+    if #target > C.MAX_AURAS_VISIBLE and target[1] then
+        self:RemoveAura(target[1].spellID, auraType)
     end
 
     return aura
@@ -157,10 +154,10 @@ end
 function AR_PlayerEntity:RemoveAura(spellID, auraType)
     local target = (auraType == 1) and self.buffs or self.debuffs
 
-    for k, v in pairs(target) do
-        if v.spellID == spellID then
-            v.frame:Hide()
-            table.remove(target, k)
+    for i = #target, 1, -1 do
+        if target[i].spellID == spellID then
+            target[i].frame:Hide()
+            table.remove(target, i)
             break
         end
     end
@@ -210,8 +207,8 @@ function AR_PlayerEntity:RemoveCooldown(obj)
 end
 
 function AR_PlayerEntity:RemoveAllCooldowns()
-    for k in pairs(self.cooldowns) do
-        self.cooldowns[k] = nil
+    for _, cd in ipairs(self.cooldowns) do
+        cd.frame:Hide()
     end
     self.cooldowns = {}
 end
