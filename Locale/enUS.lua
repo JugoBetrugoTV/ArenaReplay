@@ -7,7 +7,7 @@ L.ARENA_30              = "Thirty seconds until the Arena battle begins!"
 L.ARENA_15              = "Fifteen seconds until the Arena battle begins!"
 
 -- Addon messages
-L.LOADED                = "loaded! Type /ar for options."
+L.LOADED                = "loaded!"
 L.UNKNOWN               = "Unknown"
 L.SPEED                 = "Speed"
 L.VIEW_STATS            = "Show Stats"
@@ -17,13 +17,6 @@ L.VIEW_MATCH            = "Show Match"
 L.CONF_NOMATCHES        = "No matches found."
 L.CONF_WRONG_INPUT      = "Invalid input."
 L.CONF_MATCH_DELETED    = "Match has been deleted."
-L.HELP_LINE1            = "ArenaReplay Help"
-L.HELP_LINE2            = "ui - Display all recorded matches."
-L.HELP_LINE3            = "delete all - Delete all recorded matches."
-L.HELP_LINE4            = "broadcast - Enable/disable broadcasting."
-L.HELP_LINE5            = "lookup - List available broadcasts."
-L.HELP_LINE6            = "connect [name] - Connect to a broadcast."
-L.HELP_LINE7            = "spectators - List connected spectators."
 
 -- Status
 L.STATUS                = "Status"
@@ -70,12 +63,6 @@ L.DETAIL_HEALDONE       = "Healing\nDone"
 L.DETAIL_RATING         = "Rating"
 L.DETAIL_MMR            = "MMR"
 
--- MMR Tracker help
-L.HELP_MMR1             = "mmr - Toggle MMR display on screen."
-L.HELP_MMR2             = "mmr lock - Lock/unlock the MMR display position."
-L.HELP_MMR3             = "mmr table - Show MMR match history table."
-L.HELP_MMR4             = "mmr reset - Clear all MMR history data."
-
 -- MMR Tracker labels
 L.MMR_NO_DATA           = "No data yet"
 L.MMR_2V2               = "2v2"
@@ -87,6 +74,30 @@ L.MMR_RATING            = "Rating"
 L.MMR_MMR               = "MMR"
 L.MMR_WIN_RATE          = "Win Rate"
 L.MMR_GAMES             = "Games"
+
+-- Button labels
+L.BTN_RECORD_ON         = "Record: ON"
+L.BTN_RECORD_OFF        = "Record: OFF"
+L.BTN_BROADCAST_ON      = "Broadcast: ON"
+L.BTN_BROADCAST_OFF     = "Broadcast: OFF"
+L.BTN_FIND_BROADCASTS   = "Find Broadcasts"
+L.BTN_CONNECT           = "Connect"
+L.BTN_SPECTATORS        = "Spectators"
+L.BTN_MMR_DISPLAY       = "MMR Display"
+L.BTN_MMR_HISTORY       = "MMR History"
+L.BTN_MMR_LOCK          = "Lock MMR"
+L.BTN_MMR_UNLOCK        = "Unlock MMR"
+L.BTN_MMR_RESET         = "Reset MMR"
+L.BTN_DELETE_ALL        = "Delete All"
+
+-- Popup dialogs
+L.POPUP_CONNECT         = "Enter broadcaster name:"
+L.POPUP_DELETE_ALL      = "Delete ALL recorded matches?"
+L.POPUP_RESET_MMR       = "Reset all MMR history data?"
+L.POPUP_CONNECT_BTN     = "Connect"
+L.POPUP_DELETE_BTN      = "Delete"
+L.POPUP_RESET_BTN       = "Reset"
+L.POPUP_CANCEL          = "Cancel"
 
 -- Errors
 L.ERROR_OLDMATCHES      = "Older matches may have outdated spell data."

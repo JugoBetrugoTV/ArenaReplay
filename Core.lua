@@ -97,95 +97,17 @@ function ArenaReplay:OnEnable()
     -- Queue status (for MMR display visibility)
     self:RegisterEvent("PVP_MATCH_STATE_CHANGED")
 
-    -- Slash commands
+    -- Slash command (just opens the main panel)
     SLASH_ARENAREPLAY1 = "/ar"
     SLASH_ARENAREPLAY2 = "/arenareplay"
-    SlashCmdList["ARENAREPLAY"] = function(msg)
-        self:SlashCommand(msg)
+    SlashCmdList["ARENAREPLAY"] = function()
+        AR_TableGUI:ShowMatchesFrame()
     end
 
     -- Show MMR display on login
     AR_MMRDisplay:Show()
 
     print("|cffe392c5<ArenaReplay>|r v" .. AR.VERSION .. " " .. L.LOADED)
-end
-
-------------------------------------------------------------
--- Slash command handler
-------------------------------------------------------------
-function ArenaReplay:SlashCommand(msg)
-    msg = string.lower(msg or "")
-
-    if msg == "ui" or msg == "" then
-        AR_TableGUI:ShowMatchesFrame()
-
-    elseif msg == "broadcast" then
-        self:ToggleBroadcast()
-
-    elseif msg == "record" then
-        self:ToggleRecording()
-
-    elseif msg == "lookup" then
-        AR_Comm:Lookup()
-
-    elseif string.find(msg, "^connect%s") then
-        local name = string.sub(msg, 9)
-        if name and name ~= "" then
-            AR_Comm:ConnectTo(name)
-        end
-
-    elseif msg == "spectators" then
-        local specs = AR_Comm:GetSpectators()
-        print("|cffe392c5<ArenaReplay>|r Spectators (" .. #specs .. "):")
-        for _, name in ipairs(specs) do
-            print("  - " .. name)
-        end
-
-    elseif msg == "delete all" then
-        ArenaReplayDB.matches = {}
-        AR_TableGUI:RefreshIfShowing()
-        print("|cffe392c5<ArenaReplay>|r All matches deleted.")
-
-    elseif msg == "play" then
-        if #ArenaReplayDB.matches > 0 then
-            self:PlayMatch(1)
-        else
-            print("|cffe392c5<ArenaReplay>|r " .. L.CONF_NOMATCHES)
-        end
-
-    elseif msg == "stop" then
-        if playStub then playStub:Close() end
-
-    -- MMR Tracker commands
-    elseif msg == "mmr" then
-        AR_MMRDisplay:Toggle()
-
-    elseif msg == "mmr lock" then
-        AR_MMRDisplay:ToggleLock()
-
-    elseif msg == "mmr table" or msg == "mmrt" then
-        AR_MMRTable:Toggle()
-
-    elseif msg == "mmr reset" then
-        if ArenaReplayDB.mmr then
-            ArenaReplayDB.mmr.games = {}
-            AR_MMRTable:Refresh()
-            print("|cffe392c5<ArenaReplay>|r MMR history cleared.")
-        end
-
-    else
-        print("|cffe392c5<ArenaReplay>|r " .. L.HELP_LINE1)
-        print("  " .. L.HELP_LINE2)
-        print("  " .. L.HELP_LINE3)
-        print("  " .. L.HELP_LINE4)
-        print("  " .. L.HELP_LINE5)
-        print("  " .. L.HELP_LINE6)
-        print("  " .. L.HELP_LINE7)
-        print("  " .. L.HELP_MMR1)
-        print("  " .. L.HELP_MMR2)
-        print("  " .. L.HELP_MMR3)
-        print("  " .. L.HELP_MMR4)
-    end
 end
 
 ------------------------------------------------------------
