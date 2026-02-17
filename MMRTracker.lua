@@ -41,7 +41,7 @@ elseif Compat.isMoP then
         [3] = ALL_BRACKETS[3],
     }
     MMR.BRACKET_ORDER = { 1, 2, 4, 3 }
-elseif Compat.isTBC then
+else
     -- BCC Anniversary: 2v2, 3v3, 5v5
     MMR.BRACKETS = {
         [1] = ALL_BRACKETS[1],
@@ -49,10 +49,6 @@ elseif Compat.isTBC then
         [4] = ALL_BRACKETS[4],
     }
     MMR.BRACKET_ORDER = { 1, 2, 4 }
-else
-    -- Classic Era: no rated PvP brackets
-    MMR.BRACKETS = {}
-    MMR.BRACKET_ORDER = {}
 end
 
 ------------------------------------------------------------

@@ -14,7 +14,6 @@ local C = AR.Compat
 --   Midnight (Retail)         = WOW_PROJECT_MAINLINE (1)
 --   BCC Anniversary Edition   = WOW_PROJECT_BURNING_CRUSADE_CLASSIC (5)
 --   MoP Classic               = WOW_PROJECT_MISTS_CLASSIC (19)
---   Classic Era (Vanilla)     = WOW_PROJECT_CLASSIC (2)
 ------------------------------------------------------------
 local _, build, _, tocVersion = GetBuildInfo()
 tocVersion = tocVersion or 0
@@ -22,7 +21,6 @@ tocVersion = tocVersion or 0
 local projectID = WOW_PROJECT_ID or 1
 
 C.isRetail     = (projectID == (WOW_PROJECT_MAINLINE or 1))
-C.isClassicEra = (projectID == (WOW_PROJECT_CLASSIC or 2))
 C.isTBC        = (projectID == (WOW_PROJECT_BURNING_CRUSADE_CLASSIC or 5))
 C.isMoP        = (projectID == (WOW_PROJECT_MISTS_CLASSIC or 19))
 
@@ -35,8 +33,8 @@ C.tocVersion = tocVersion
 ------------------------------------------------------------
 -- Feature flags
 ------------------------------------------------------------
-C.hasArenas         = not C.isClassicEra
-C.hasRatedPvP       = C.hasArenas
+C.hasArenas         = true
+C.hasRatedPvP       = true
 C.hasSoloShuffle    = C.isRetail
 C.hasBlitz          = C.isRetail
 C.hasRBG            = C.isRetail or C.isMoP
@@ -53,10 +51,9 @@ C.hasC_Map          = (C_Map and C_Map.GetBestMapForUnit) ~= nil
 -- Version string for display
 ------------------------------------------------------------
 function C.GetVersionTag()
-    if C.isRetail     then return "Midnight" end
-    if C.isMoP        then return "MoP Classic" end
-    if C.isTBC        then return "BCC Anniversary" end
-    if C.isClassicEra then return "Classic" end
+    if C.isRetail then return "Midnight" end
+    if C.isMoP    then return "MoP Classic" end
+    if C.isTBC    then return "BCC Anniversary" end
     return "Unknown"
 end
 
@@ -232,7 +229,7 @@ function C.GetPlayerSpec()
             return specName or ""
         end
     end
-    -- Classic Era / BCC Anniversary: no spec API
+    -- BCC Anniversary: no spec API
     return ""
 end
 
