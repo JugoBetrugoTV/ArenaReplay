@@ -110,6 +110,24 @@ function MinimapBtn:ShowMenu(anchor)
                 if AR.Core then AR.Core:ToggleBroadcast() end
             end,
         },
+        { text = " ", isTitle = true, notCheckable = true },
+        { text = "MMR Tracker", isTitle = true, notCheckable = true },
+        {
+            text = "Toggle MMR Display",
+            notCheckable = true,
+            func = function() AR_MMRDisplay:Toggle() end,
+        },
+        {
+            text = "MMR Match History",
+            notCheckable = true,
+            func = function() AR_MMRTable:Toggle() end,
+        },
+        {
+            text = "Lock/Unlock MMR Position",
+            notCheckable = true,
+            func = function() AR_MMRDisplay:ToggleLock() end,
+        },
+        { text = " ", isTitle = true, notCheckable = true },
         {
             text = "Delete All Matches",
             notCheckable = true,

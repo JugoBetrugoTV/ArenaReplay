@@ -6,7 +6,7 @@ local Data = AR.Data
 -- Addon version
 ------------------------------------------------------------
 AR.VERSION_MAJOR = 1
-AR.VERSION_MINOR = 0
+AR.VERSION_MINOR = 1
 AR.VERSION_PATCH = 0
 AR.VERSION = AR.VERSION_MAJOR .. "." .. AR.VERSION_MINOR .. "." .. AR.VERSION_PATCH
 

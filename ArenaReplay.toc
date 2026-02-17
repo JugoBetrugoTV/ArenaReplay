@@ -1,9 +1,9 @@
 ## Interface: 120000
 ## Title: ArenaReplay
-## Notes: Record, replay and broadcast arena matches. Inspired by AAV (atrox Arena Viewer), rebuilt for WoW Midnight 12.0.
-## Notes-deDE: Arena-Matches aufnehmen, abspielen und uebertragen. Inspiriert von AAV, neu gebaut fuer WoW Midnight 12.0.
+## Notes: Record, replay and broadcast arena matches. Includes MMR Tracker. Inspired by AAV + mmr-tracker, rebuilt for WoW Midnight 12.0.
+## Notes-deDE: Arena-Matches aufnehmen, abspielen und uebertragen. Mit MMR Tracker. Inspiriert von AAV + mmr-tracker, neu gebaut fuer WoW Midnight 12.0.
 ## Author: ArenaReplay Contributors
-## Version: 1.0.0
+## Version: 1.1.0
 ## SavedVariables: ArenaReplayDB
 ## IconTexture: Interface\Icons\Achievement_Arena_2v2_7
 
@@ -33,6 +33,9 @@ GUI\Cooldown.lua
 GUI\Entity.lua
 GUI\Seeker.lua
 GUI\TeamStats.lua
+GUI\MMRDisplay.lua
+GUI\MMRTable.lua
+MMRTracker.lua
 PlayStub.lua
 Comm.lua
 Core.lua

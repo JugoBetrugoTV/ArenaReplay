@@ -65,6 +65,9 @@ function ArenaReplay:OnInitialize()
     -- Initialize communication
     AR_Comm:Init(self)
 
+    -- Initialize MMR tracker
+    AR_MMRTracker:Init()
+
     -- Create minimap button
     AR_MinimapButton:Create()
 end
@@ -88,12 +91,21 @@ function ArenaReplay:OnEnable()
     self:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
     self:RegisterEvent("PVP_MATCH_COMPLETE")
 
+    -- Loading screen (for MMR display refresh)
+    self:RegisterEvent("LOADING_SCREEN_DISABLED")
+
+    -- Queue status (for MMR display visibility)
+    self:RegisterEvent("PVP_MATCH_STATE_CHANGED")
+
     -- Slash commands
     SLASH_ARENAREPLAY1 = "/ar"
     SLASH_ARENAREPLAY2 = "/arenareplay"
     SlashCmdList["ARENAREPLAY"] = function(msg)
         self:SlashCommand(msg)
     end
+
+    -- Show MMR display on login
+    AR_MMRDisplay:Show()
 
     print("|cffe392c5<ArenaReplay>|r v" .. AR.VERSION .. " " .. L.LOADED)
 end
@@ -144,6 +156,23 @@ function ArenaReplay:SlashCommand(msg)
     elseif msg == "stop" then
         if playStub then playStub:Close() end
 
+    -- MMR Tracker commands
+    elseif msg == "mmr" then
+        AR_MMRDisplay:Toggle()
+
+    elseif msg == "mmr lock" then
+        AR_MMRDisplay:ToggleLock()
+
+    elseif msg == "mmr table" or msg == "mmrt" then
+        AR_MMRTable:Toggle()
+
+    elseif msg == "mmr reset" then
+        if ArenaReplayDB.mmr then
+            ArenaReplayDB.mmr.games = {}
+            AR_MMRTable:Refresh()
+            print("|cffe392c5<ArenaReplay>|r MMR history cleared.")
+        end
+
     else
         print("|cffe392c5<ArenaReplay>|r " .. L.HELP_LINE1)
         print("  " .. L.HELP_LINE2)
@@ -152,6 +181,10 @@ function ArenaReplay:SlashCommand(msg)
         print("  " .. L.HELP_LINE5)
         print("  " .. L.HELP_LINE6)
         print("  " .. L.HELP_LINE7)
+        print("  " .. L.HELP_MMR1)
+        print("  " .. L.HELP_MMR2)
+        print("  " .. L.HELP_MMR3)
+        print("  " .. L.HELP_MMR4)
     end
 end
 
@@ -189,6 +222,7 @@ end
 ------------------------------------------------------------
 function ArenaReplay:PLAYER_ENTERING_WORLD()
     self:CheckArenaZone()
+    AR_MMRDisplay:Update()
 end
 
 function ArenaReplay:ZONE_CHANGED_NEW_AREA()
@@ -217,6 +251,9 @@ function ArenaReplay:OnEnterArena()
     guidCache = {}
     isFighting = false
     arenaStartTime = GetTime()
+
+    -- Snapshot pre-match MMR/Rating for tracking
+    AR_MMRTracker:SnapshotPreMatch()
 
     -- Scan existing party members
     self:ScanParty()
@@ -326,6 +363,22 @@ end
 ------------------------------------------------------------
 function ArenaReplay:UPDATE_BATTLEFIELD_STATUS()
     -- Used for detecting queue pops; zone check handles the rest
+    -- Also refresh MMR display (may toggle visibility based on queue state)
+    AR_MMRDisplay:Update()
+end
+
+function ArenaReplay:LOADING_SCREEN_DISABLED()
+    -- Refresh MMR display after loading screens
+    self:ScheduleTimer(function()
+        AR_MMRDisplay:Update()
+    end, 1)
+end
+
+function ArenaReplay:PVP_MATCH_STATE_CHANGED()
+    -- Refresh MMR display when PvP state changes
+    self:ScheduleTimer(function()
+        AR_MMRDisplay:Update()
+    end, 0.5)
 end
 
 ------------------------------------------------------------
@@ -616,9 +669,15 @@ end
 -- Match end detection
 ------------------------------------------------------------
 function ArenaReplay:PVP_MATCH_COMPLETE()
+    -- Track MMR change (works even if recording is off)
+    AR_MMRTracker:OnMatchComplete()
+
     if not currentMatch or not isInArena then return end
     self:ReadScoreboard()
     self:FinalizeMatch()
+
+    -- Refresh MMR display after match
+    AR_MMRDisplay:Update()
 end
 
 function ArenaReplay:UPDATE_BATTLEFIELD_SCORE()

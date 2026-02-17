@@ -70,5 +70,23 @@ L.DETAIL_HEALDONE       = "Healing\nDone"
 L.DETAIL_RATING         = "Rating"
 L.DETAIL_MMR            = "MMR"
 
+-- MMR Tracker help
+L.HELP_MMR1             = "mmr - Toggle MMR display on screen."
+L.HELP_MMR2             = "mmr lock - Lock/unlock the MMR display position."
+L.HELP_MMR3             = "mmr table - Show MMR match history table."
+L.HELP_MMR4             = "mmr reset - Clear all MMR history data."
+
+-- MMR Tracker labels
+L.MMR_NO_DATA           = "No data yet"
+L.MMR_2V2               = "2v2"
+L.MMR_3V3               = "3v3"
+L.MMR_RBG               = "RBG"
+L.MMR_SHUFFLE           = "Shuffle"
+L.MMR_BLITZ             = "Blitz"
+L.MMR_RATING            = "Rating"
+L.MMR_MMR               = "MMR"
+L.MMR_WIN_RATE          = "Win Rate"
+L.MMR_GAMES             = "Games"
+
 -- Errors
 L.ERROR_OLDMATCHES      = "Older matches may have outdated spell data."
