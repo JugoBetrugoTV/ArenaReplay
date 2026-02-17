@@ -82,11 +82,16 @@ function MMR:Init()
                 showBlitz   = Compat.hasBlitz or false,
                 showMMRDiff = true,
                 showGains   = true,
+                hideNoData  = false,
                 lock        = false,
                 position    = { "CENTER", "CENTER", 0, 200 },
                 fontSize    = 13,
+                textColor   = { r = 1, g = 1, b = 1, a = 1 },
                 showOnlyInQueue = false,
                 showInPVP   = false,
+                showInPVE   = true,
+                classColors  = true,
+                winLossIcons = true,
             },
         }
     end
@@ -139,19 +144,23 @@ function MMR:RecordMatch(bracketID, spec, mapName, beforeRating, afterRating, be
         change = ratingChange
     end
 
+    -- Store class token for class-colored display
+    local _, classToken = UnitClass("player")
+
     local entry = {
-        bracket   = bracketID,
-        name      = bracketInfo.name,
-        spec      = spec or "",
-        map       = mapName or "",
-        before    = before,
-        change    = change,
-        after     = after,
-        won       = won,
-        date      = date("%Y-%m-%d %H:%M:%S"),
-        timestamp = time(),
-        character = UnitName("player") .. "-" .. GetRealmName(),
-        region    = GetCurrentRegion and GetCurrentRegion() or 1,
+        bracket    = bracketID,
+        name       = bracketInfo.name,
+        spec       = spec or "",
+        classToken = classToken or "",
+        map        = mapName or "",
+        before     = before,
+        change     = change,
+        after      = after,
+        won        = won,
+        date       = date("%Y-%m-%d %H:%M:%S"),
+        timestamp  = time(),
+        character  = UnitName("player") .. "-" .. GetRealmName(),
+        region     = GetCurrentRegion and GetCurrentRegion() or 1,
     }
 
     table.insert(ArenaReplayDB.mmr.games, 1, entry) -- newest first

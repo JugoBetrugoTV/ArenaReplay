@@ -1,0 +1,343 @@
+local _, AR = ...
+local Compat = AR.Compat
+local L = LibStub("AceLocale-3.0"):GetLocale("ArenaReplay")
+
+------------------------------------------------------------
+-- AceConfig Options Panel for ArenaReplay MMR Settings
+-- Inspired by rbgdevx/mmr-tracker
+------------------------------------------------------------
+local AceConfig = LibStub("AceConfig-3.0")
+local AceConfigDialog = LibStub("AceConfigDialog-3.0")
+
+AR_Options = {}
+local Options = AR_Options
+
+local function GetSettings()
+    if not ArenaReplayDB or not ArenaReplayDB.mmr then return {} end
+    return ArenaReplayDB.mmr.display
+end
+
+------------------------------------------------------------
+-- Build the options table
+------------------------------------------------------------
+function Options:GetOptionsTable()
+    local options = {
+        name = "ArenaReplay - " .. L.OPT_MMR_SETTINGS,
+        type = "group",
+        args = {
+            headerBrackets = {
+                order = 1,
+                type = "header",
+                name = L.OPT_BRACKET_VISIBILITY,
+            },
+            show2v2 = {
+                order = 10,
+                type = "toggle",
+                name = L.MMR_2V2 .. " " .. L.MMR_RATING,
+                desc = L.OPT_SHOW_BRACKET_DESC,
+                width = "normal",
+                get = function() return GetSettings().show2v2 ~= false end,
+                set = function(_, val)
+                    GetSettings().show2v2 = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            show3v3 = {
+                order = 11,
+                type = "toggle",
+                name = L.MMR_3V3 .. " " .. L.MMR_RATING,
+                desc = L.OPT_SHOW_BRACKET_DESC,
+                width = "normal",
+                get = function() return GetSettings().show3v3 ~= false end,
+                set = function(_, val)
+                    GetSettings().show3v3 = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            showShuffle = {
+                order = 12,
+                type = "toggle",
+                name = L.MMR_SHUFFLE .. " " .. L.MMR_MMR,
+                desc = L.OPT_SHOW_BRACKET_DESC,
+                width = "normal",
+                hidden = function() return not Compat.hasSoloShuffle end,
+                get = function() return GetSettings().showShuffle ~= false end,
+                set = function(_, val)
+                    GetSettings().showShuffle = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            showBlitz = {
+                order = 13,
+                type = "toggle",
+                name = L.MMR_BLITZ .. " " .. L.MMR_MMR,
+                desc = L.OPT_SHOW_BRACKET_DESC,
+                width = "normal",
+                hidden = function() return not Compat.hasBlitz end,
+                get = function() return GetSettings().showBlitz ~= false end,
+                set = function(_, val)
+                    GetSettings().showBlitz = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            showRBG = {
+                order = 14,
+                type = "toggle",
+                name = L.MMR_RBG .. " " .. L.MMR_RATING,
+                desc = L.OPT_SHOW_BRACKET_DESC,
+                width = "normal",
+                hidden = function() return not Compat.hasRBG end,
+                get = function() return GetSettings().showRBG ~= false end,
+                set = function(_, val)
+                    GetSettings().showRBG = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            show5v5 = {
+                order = 15,
+                type = "toggle",
+                name = "5v5 " .. L.MMR_RATING,
+                desc = L.OPT_SHOW_BRACKET_DESC,
+                width = "normal",
+                hidden = function() return not Compat.has5v5 end,
+                get = function() return GetSettings().show5v5 ~= false end,
+                set = function(_, val)
+                    GetSettings().show5v5 = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+
+            ----------------------------------------------------------------
+            -- Display settings
+            ----------------------------------------------------------------
+            headerDisplay = {
+                order = 20,
+                type = "header",
+                name = L.OPT_DISPLAY_SETTINGS,
+            },
+            lock = {
+                order = 21,
+                type = "toggle",
+                name = L.OPT_LOCK_DISPLAY,
+                desc = L.OPT_LOCK_DISPLAY_DESC,
+                width = "full",
+                get = function() return GetSettings().lock end,
+                set = function(_, val)
+                    GetSettings().lock = val
+                    if val then
+                        AR_MMRDisplay:Lock()
+                    else
+                        AR_MMRDisplay:Unlock()
+                    end
+                end,
+            },
+            showMMRDiff = {
+                order = 22,
+                type = "toggle",
+                name = L.OPT_SHOW_BEFORE_AFTER,
+                desc = L.OPT_SHOW_BEFORE_AFTER_DESC,
+                width = "full",
+                get = function() return GetSettings().showMMRDiff ~= false end,
+                set = function(_, val)
+                    GetSettings().showMMRDiff = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            showGains = {
+                order = 23,
+                type = "toggle",
+                name = L.OPT_SHOW_GAINS,
+                desc = L.OPT_SHOW_GAINS_DESC,
+                width = "full",
+                get = function() return GetSettings().showGains ~= false end,
+                set = function(_, val)
+                    GetSettings().showGains = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            hideNoData = {
+                order = 24,
+                type = "toggle",
+                name = L.OPT_HIDE_NO_DATA,
+                desc = L.OPT_HIDE_NO_DATA_DESC,
+                width = "full",
+                get = function() return GetSettings().hideNoData end,
+                set = function(_, val)
+                    GetSettings().hideNoData = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+
+            ----------------------------------------------------------------
+            -- Visibility
+            ----------------------------------------------------------------
+            headerVisibility = {
+                order = 30,
+                type = "header",
+                name = L.OPT_VISIBILITY,
+            },
+            showOnlyInQueue = {
+                order = 31,
+                type = "toggle",
+                name = L.OPT_ONLY_IN_QUEUE,
+                desc = L.OPT_ONLY_IN_QUEUE_DESC,
+                width = "full",
+                get = function() return GetSettings().showOnlyInQueue end,
+                set = function(_, val)
+                    GetSettings().showOnlyInQueue = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            showInPVP = {
+                order = 32,
+                type = "toggle",
+                name = L.OPT_SHOW_IN_PVP,
+                desc = L.OPT_SHOW_IN_PVP_DESC,
+                width = "full",
+                get = function() return GetSettings().showInPVP end,
+                set = function(_, val)
+                    GetSettings().showInPVP = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            showInPVE = {
+                order = 33,
+                type = "toggle",
+                name = L.OPT_SHOW_IN_PVE,
+                desc = L.OPT_SHOW_IN_PVE_DESC,
+                width = "full",
+                get = function() return GetSettings().showInPVE ~= false end,
+                set = function(_, val)
+                    GetSettings().showInPVE = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+
+            ----------------------------------------------------------------
+            -- Appearance
+            ----------------------------------------------------------------
+            headerAppearance = {
+                order = 40,
+                type = "header",
+                name = L.OPT_APPEARANCE,
+            },
+            fontSize = {
+                order = 41,
+                type = "range",
+                name = L.OPT_FONT_SIZE,
+                desc = L.OPT_FONT_SIZE_DESC,
+                min = 8,
+                max = 32,
+                step = 1,
+                width = "double",
+                get = function() return GetSettings().fontSize or 13 end,
+                set = function(_, val)
+                    GetSettings().fontSize = val
+                    AR_MMRDisplay:Update()
+                end,
+            },
+            textColor = {
+                order = 42,
+                type = "color",
+                name = L.OPT_TEXT_COLOR,
+                desc = L.OPT_TEXT_COLOR_DESC,
+                hasAlpha = true,
+                width = "normal",
+                get = function()
+                    local c = GetSettings().textColor or { r = 1, g = 1, b = 1, a = 1 }
+                    return c.r, c.g, c.b, c.a
+                end,
+                set = function(_, r, g, b, a)
+                    GetSettings().textColor = { r = r, g = g, b = b, a = a }
+                    AR_MMRDisplay:Update()
+                end,
+            },
+
+            ----------------------------------------------------------------
+            -- Table settings
+            ----------------------------------------------------------------
+            headerTable = {
+                order = 50,
+                type = "header",
+                name = L.OPT_TABLE_SETTINGS,
+            },
+            classColors = {
+                order = 51,
+                type = "toggle",
+                name = L.OPT_CLASS_COLORS,
+                desc = L.OPT_CLASS_COLORS_DESC,
+                width = "full",
+                get = function() return GetSettings().classColors ~= false end,
+                set = function(_, val)
+                    GetSettings().classColors = val
+                    if AR_MMRTable:IsShowing() then AR_MMRTable:Refresh() end
+                end,
+            },
+            winLossIcons = {
+                order = 52,
+                type = "toggle",
+                name = L.OPT_WIN_LOSS_ICONS,
+                desc = L.OPT_WIN_LOSS_ICONS_DESC,
+                width = "full",
+                get = function() return GetSettings().winLossIcons ~= false end,
+                set = function(_, val)
+                    GetSettings().winLossIcons = val
+                    if AR_MMRTable:IsShowing() then AR_MMRTable:Refresh() end
+                end,
+            },
+
+            ----------------------------------------------------------------
+            -- Reset
+            ----------------------------------------------------------------
+            headerReset = {
+                order = 90,
+                type = "header",
+                name = "",
+            },
+            resetSettings = {
+                order = 91,
+                type = "execute",
+                name = L.OPT_RESET_SETTINGS,
+                desc = L.OPT_RESET_SETTINGS_DESC,
+                confirm = true,
+                confirmText = L.OPT_RESET_CONFIRM,
+                func = function()
+                    if ArenaReplayDB.mmr then
+                        local games = ArenaReplayDB.mmr.games
+                        ArenaReplayDB.mmr.display = nil
+                        AR_MMRTracker:Init()
+                        ArenaReplayDB.mmr.games = games
+                        AR_MMRDisplay:Update()
+                        print("|cffe392c5<ArenaReplay>|r " .. L.OPT_RESET_DONE)
+                    end
+                end,
+            },
+        },
+    }
+
+    return options
+end
+
+------------------------------------------------------------
+-- Register with AceConfig and Blizzard options
+------------------------------------------------------------
+function Options:Init()
+    AceConfig:RegisterOptionsTable("ArenaReplay_MMR", self:GetOptionsTable())
+
+    -- Add to Interface > AddOns
+    if Settings and Settings.RegisterCanvasLayoutCategory then
+        -- Retail 10.x+ uses Settings API
+        self.optionsFrame = AceConfigDialog:AddToBlizOptions("ArenaReplay_MMR", "ArenaReplay")
+    else
+        -- Classic / older: InterfaceOptions
+        self.optionsFrame = AceConfigDialog:AddToBlizOptions("ArenaReplay_MMR", "ArenaReplay")
+    end
+end
+
+------------------------------------------------------------
+-- Open the settings panel
+------------------------------------------------------------
+function Options:Open()
+    -- Try standalone AceConfigDialog window first (more reliable across versions)
+    AceConfigDialog:Open("ArenaReplay_MMR")
+end

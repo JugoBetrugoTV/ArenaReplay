@@ -69,6 +69,9 @@ function ArenaReplay:OnInitialize()
     -- Initialize MMR tracker
     AR_MMRTracker:Init()
 
+    -- Initialize options panel
+    AR_Options:Init()
+
     -- Create minimap button
     AR_MinimapButton:Create()
 end
@@ -98,11 +101,20 @@ function ArenaReplay:OnEnable()
         self:RegisterEvent("PVP_MATCH_STATE_CHANGED")
     end
 
-    -- Slash command (just opens the main panel)
+    -- Slash commands
     SLASH_ARENAREPLAY1 = "/ar"
     SLASH_ARENAREPLAY2 = "/arenareplay"
-    SlashCmdList["ARENAREPLAY"] = function()
-        AR_TableGUI:ShowMatchesFrame()
+    SlashCmdList["ARENAREPLAY"] = function(msg)
+        msg = (msg or ""):trim():lower()
+        if msg == "settings" or msg == "config" or msg == "options" then
+            AR_Options:Open()
+        elseif msg == "mmr" then
+            AR_MMRDisplay:Toggle()
+        elseif msg == "history" or msg == "table" then
+            AR_MMRTable:Toggle()
+        else
+            AR_TableGUI:ShowMatchesFrame()
+        end
     end
 
     -- Show MMR display on login (only if rated PvP exists)

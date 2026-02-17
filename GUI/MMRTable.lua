@@ -3,9 +3,69 @@ local _, AR = ...
 ------------------------------------------------------------
 -- AR_MMRTable: Match history table with bracket tabs and filters
 -- Displays recorded MMR/Rating data in a scrollable table
+-- Supports class-colored spec names and win/loss icons
 ------------------------------------------------------------
 AR_MMRTable = {}
 local MMRTable = AR_MMRTable
+
+-- Map spec names to class tokens for coloring (best effort)
+-- This maps common English spec names; class token stored in game data is preferred
+local SPEC_CLASS_MAP = {
+    -- Death Knight
+    ["Blood"]       = "DEATHKNIGHT", ["Frost DK"]    = "DEATHKNIGHT", ["Unholy"]      = "DEATHKNIGHT",
+    -- Demon Hunter
+    ["Havoc"]       = "DEMONHUNTER", ["Vengeance"]   = "DEMONHUNTER",
+    -- Druid
+    ["Balance"]     = "DRUID",       ["Feral"]       = "DRUID",       ["Guardian"]    = "DRUID",       ["Restoration Druid"] = "DRUID",
+    -- Evoker
+    ["Devastation"] = "EVOKER",      ["Preservation"]= "EVOKER",      ["Augmentation"]= "EVOKER",
+    -- Hunter
+    ["Beast Mastery"]= "HUNTER",     ["Marksmanship"]= "HUNTER",      ["Survival"]    = "HUNTER",
+    -- Mage
+    ["Arcane"]      = "MAGE",        ["Fire"]        = "MAGE",        ["Frost"]       = "MAGE",
+    -- Monk
+    ["Brewmaster"]  = "MONK",        ["Mistweaver"]  = "MONK",        ["Windwalker"]  = "MONK",
+    -- Paladin
+    ["Holy Paladin"]= "PALADIN",     ["Protection Paladin"] = "PALADIN", ["Retribution"]= "PALADIN",
+    -- Priest
+    ["Discipline"]  = "PRIEST",      ["Holy"]        = "PRIEST",      ["Shadow"]      = "PRIEST",
+    -- Rogue
+    ["Assassination"]= "ROGUE",      ["Outlaw"]      = "ROGUE",       ["Subtlety"]    = "ROGUE",
+    -- Shaman
+    ["Elemental"]   = "SHAMAN",      ["Enhancement"] = "SHAMAN",      ["Restoration"] = "SHAMAN", ["Restoration Shaman"] = "SHAMAN",
+    -- Warlock
+    ["Affliction"]  = "WARLOCK",     ["Demonology"]  = "WARLOCK",     ["Destruction"] = "WARLOCK",
+    -- Warrior
+    ["Arms"]        = "WARRIOR",     ["Fury"]        = "WARRIOR",     ["Protection"]  = "WARRIOR",
+}
+
+-- Win/Loss icon textures (Blizzard readycheck icons)
+local ICON_WIN  = "|TInterface\\RaidFrame\\ReadyCheck-Ready:14:14:0:0|t"
+local ICON_LOSS = "|TInterface\\RaidFrame\\ReadyCheck-NotReady:14:14:0:0|t"
+
+local function GetClassColoredSpec(specName, classToken)
+    if not specName or specName == "" then return specName or "" end
+
+    -- Prefer explicit class token from game data
+    local token = classToken or SPEC_CLASS_MAP[specName]
+    if not token then
+        -- Try partial match: check if spec name contains a known key
+        for key, cls in pairs(SPEC_CLASS_MAP) do
+            if specName:find(key) then
+                token = cls
+                break
+            end
+        end
+    end
+
+    if token and RAID_CLASS_COLORS and RAID_CLASS_COLORS[token] then
+        local color = RAID_CLASS_COLORS[token]
+        local hex = color.colorStr or string.format("ff%02x%02x%02x", color.r * 255, color.g * 255, color.b * 255)
+        return "|c" .. hex .. specName .. "|r"
+    end
+
+    return specName
+end
 
 local tableFrame = nil
 local dataRows = {}
@@ -323,8 +383,13 @@ function MMRTable:Refresh()
         -- Map
         row.fields[2]:SetText(game.map or "")
 
-        -- Spec
-        row.fields[3]:SetText(game.spec or "")
+        -- Spec (class-colored if setting enabled)
+        local settings = ArenaReplayDB and ArenaReplayDB.mmr and ArenaReplayDB.mmr.display or {}
+        local specText = game.spec or ""
+        if settings.classColors ~= false then
+            specText = GetClassColoredSpec(specText, game.classToken)
+        end
+        row.fields[3]:SetText(specText)
 
         -- Bracket
         row.fields[4]:SetText(game.name or "")
@@ -345,11 +410,19 @@ function MMRTable:Refresh()
         -- After
         row.fields[7]:SetText(tostring(game.after or 0))
 
-        -- Win/Loss
-        if game.won then
-            row.fields[8]:SetText("|cff00ff00W|r")
+        -- Win/Loss (icons if setting enabled)
+        if settings.winLossIcons ~= false then
+            if game.won then
+                row.fields[8]:SetText(ICON_WIN)
+            else
+                row.fields[8]:SetText(ICON_LOSS)
+            end
         else
-            row.fields[8]:SetText("|cffff0000L|r")
+            if game.won then
+                row.fields[8]:SetText("|cff00ff00W|r")
+            else
+                row.fields[8]:SetText("|cffff0000L|r")
+            end
         end
 
         row:Show()
