@@ -77,21 +77,34 @@ local DB_DEFAULTS = {
 -- This bridges profile data to the existing code that reads
 -- ArenaReplayDB.mmr.display and ArenaReplayDB.defaults directly.
 ------------------------------------------------------------
+-- Deep copy a value (handles nested tables)
+local function DeepCopy(val)
+    if type(val) ~= "table" then return val end
+    local copy = {}
+    for k, v in pairs(val) do
+        copy[k] = DeepCopy(v)
+    end
+    return copy
+end
+
 local function SyncProfileToDB()
     local profile = ArenaReplay.db and ArenaReplay.db.profile
     if not profile then return end
 
-    -- Sync mmr display settings
+    -- Ensure mmr.display exists before syncing
     if ArenaReplayDB and ArenaReplayDB.mmr then
+        if not ArenaReplayDB.mmr.display then
+            ArenaReplayDB.mmr.display = {}
+        end
         for k, v in pairs(profile.mmrDisplay) do
-            ArenaReplayDB.mmr.display[k] = v
+            ArenaReplayDB.mmr.display[k] = DeepCopy(v)
         end
     end
 
     -- Sync general display settings
     if ArenaReplayDB and ArenaReplayDB.defaults then
         for k, v in pairs(profile.display) do
-            ArenaReplayDB.defaults[k] = v
+            ArenaReplayDB.defaults[k] = DeepCopy(v)
         end
     end
 end
@@ -164,6 +177,7 @@ end
 function ArenaReplay:OnProfileSync()
     SyncProfileToDB()
     AR_MMRDisplay:Update()
+    AR_MinimapButton:Refresh()
 end
 
 ------------------------------------------------------------

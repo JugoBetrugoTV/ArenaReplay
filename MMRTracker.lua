@@ -73,27 +73,43 @@ function MMR:Init()
     if not ArenaReplayDB.mmr then
         ArenaReplayDB.mmr = {
             games = {},
-            display = {
-                show2v2     = true,
-                show3v3     = true,
-                show5v5     = Compat.has5v5 or false,
-                showRBG     = Compat.hasRBG or false,
-                showShuffle = Compat.hasSoloShuffle or false,
-                showBlitz   = Compat.hasBlitz or false,
-                showMMRDiff = true,
-                showGains   = true,
-                hideNoData  = false,
-                lock        = false,
-                position    = { "CENTER", "CENTER", 0, 200 },
-                fontSize    = 13,
-                textColor   = { r = 1, g = 1, b = 1, a = 1 },
-                showOnlyInQueue = false,
-                showInPVP   = false,
-                showInPVE   = true,
-                classColors  = true,
-                winLossIcons = true,
-            },
+            display = {},
         }
+    end
+    -- Ensure games table exists
+    if not ArenaReplayDB.mmr.games then
+        ArenaReplayDB.mmr.games = {}
+    end
+    -- Ensure display sub-table exists (may be nil after settings reset)
+    if not ArenaReplayDB.mmr.display then
+        ArenaReplayDB.mmr.display = {}
+    end
+    -- Fill in missing display defaults
+    local displayDefaults = {
+        show2v2     = true,
+        show3v3     = true,
+        show5v5     = Compat.has5v5 or false,
+        showRBG     = Compat.hasRBG or false,
+        showShuffle = Compat.hasSoloShuffle or false,
+        showBlitz   = Compat.hasBlitz or false,
+        showMMRDiff = true,
+        showGains   = true,
+        hideNoData  = false,
+        lock        = false,
+        position    = { "CENTER", "CENTER", 0, 200 },
+        fontSize    = 13,
+        fontFamily  = "Friz Quadrata TT",
+        textColor   = { r = 1, g = 1, b = 1, a = 1 },
+        showOnlyInQueue = false,
+        showInPVP   = false,
+        showInPVE   = true,
+        classColors  = true,
+        winLossIcons = true,
+    }
+    for k, v in pairs(displayDefaults) do
+        if ArenaReplayDB.mmr.display[k] == nil then
+            ArenaReplayDB.mmr.display[k] = v
+        end
     end
 end
 

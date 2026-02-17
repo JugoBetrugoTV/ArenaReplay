@@ -67,6 +67,14 @@ end
 
 function MinimapBtn:Refresh()
     if not AR.db then return end
+    -- Update LibDBIcon's internal db reference to current profile's minimap table
+    -- This is needed after AceDB profile switches, since LibDBIcon stores a reference
+    -- to the minimap table given at Register() time, which becomes stale.
+    local button = LDBIcon:GetMinimapButton("ArenaReplay")
+    if button and button.db then
+        -- Point LibDBIcon at the new profile's minimap table
+        button.db = AR.db.profile.minimap
+    end
     if AR.db.profile.minimap.hide then
         LDBIcon:Hide("ArenaReplay")
     else

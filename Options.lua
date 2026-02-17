@@ -16,8 +16,12 @@ AR_Options = {}
 local Options = AR_Options
 
 -- Helper: get display settings from ArenaReplayDB (bridge target)
+-- Returns the actual table or a safe empty fallback (never nil)
+local EMPTY_SETTINGS = {}
 local function GetSettings()
-    if not ArenaReplayDB or not ArenaReplayDB.mmr then return {} end
+    if not ArenaReplayDB or not ArenaReplayDB.mmr or not ArenaReplayDB.mmr.display then
+        return EMPTY_SETTINGS
+    end
     return ArenaReplayDB.mmr.display
 end
 
@@ -29,15 +33,17 @@ end
 
 -- Helper: write to both AceDB profile AND ArenaReplayDB bridge
 local function SetDisplayOpt(key, val)
-    -- Write to AceDB profile
+    -- Write to AceDB profile (source of truth)
     local profile = GetProfile()
     if profile.mmrDisplay then
         profile.mmrDisplay[key] = val
     end
-    -- Write to ArenaReplayDB bridge
-    local settings = GetSettings()
-    if settings then
-        settings[key] = val
+    -- Write to ArenaReplayDB bridge (ensure table exists)
+    if ArenaReplayDB and ArenaReplayDB.mmr then
+        if not ArenaReplayDB.mmr.display then
+            ArenaReplayDB.mmr.display = {}
+        end
+        ArenaReplayDB.mmr.display[key] = val
     end
 end
 
