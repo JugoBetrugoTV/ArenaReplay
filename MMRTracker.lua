@@ -2,26 +2,55 @@ local _, AR = ...
 
 ------------------------------------------------------------
 -- AR_MMRTracker: Tracks MMR and Rating across all PvP brackets
--- Inspired by rbgdevx/mmr-tracker, integrated into ArenaReplay
+-- Version-aware: brackets vary by expansion
 ------------------------------------------------------------
 AR_MMRTracker = {}
 local MMR = AR_MMRTracker
-
-local issecretvalue = issecretvalue or function() return false end
+local Compat = AR.Compat
 
 ------------------------------------------------------------
--- Bracket definitions
--- PvP bracket IDs: 1=2v2, 2=3v3, 3=RBG, 6=Shuffle, 8=Blitz
+-- Bracket definitions (version-dependent)
+-- PvP bracket IDs: 1=2v2, 2=3v3, 4=5v5, 3=RBG, 6=Shuffle, 8=Blitz
 ------------------------------------------------------------
-MMR.BRACKETS = {
+local ALL_BRACKETS = {
     [1] = { id = 1, name = "2v2",     hasMMR = false, short = "2v2" },
     [2] = { id = 2, name = "3v3",     hasMMR = false, short = "3v3" },
+    [4] = { id = 4, name = "5v5",     hasMMR = false, short = "5v5" },
     [3] = { id = 3, name = "RBG",     hasMMR = false, short = "RBG" },
     [6] = { id = 6, name = "Shuffle", hasMMR = true,  short = "Shuffle" },
     [8] = { id = 8, name = "Blitz",   hasMMR = true,  short = "Blitz" },
 }
 
-MMR.BRACKET_ORDER = { 1, 2, 3, 6, 8 }
+-- Build version-specific bracket tables
+if Compat.isRetail then
+    MMR.BRACKETS = {
+        [1] = ALL_BRACKETS[1],
+        [2] = ALL_BRACKETS[2],
+        [3] = ALL_BRACKETS[3],
+        [6] = ALL_BRACKETS[6],
+        [8] = ALL_BRACKETS[8],
+    }
+    MMR.BRACKET_ORDER = { 1, 2, 3, 6, 8 }
+elseif Compat.isCata then
+    MMR.BRACKETS = {
+        [1] = ALL_BRACKETS[1],
+        [2] = ALL_BRACKETS[2],
+        [4] = ALL_BRACKETS[4],
+        [3] = ALL_BRACKETS[3],
+    }
+    MMR.BRACKET_ORDER = { 1, 2, 4, 3 }
+elseif Compat.isTBC or Compat.isWrath then
+    MMR.BRACKETS = {
+        [1] = ALL_BRACKETS[1],
+        [2] = ALL_BRACKETS[2],
+        [4] = ALL_BRACKETS[4],
+    }
+    MMR.BRACKET_ORDER = { 1, 2, 4 }
+else
+    -- Classic Era: no rated PvP brackets
+    MMR.BRACKETS = {}
+    MMR.BRACKET_ORDER = {}
+end
 
 ------------------------------------------------------------
 -- Time filter modes
@@ -43,13 +72,14 @@ MMR.TIME_FILTERS = {
 function MMR:Init()
     if not ArenaReplayDB.mmr then
         ArenaReplayDB.mmr = {
-            games = {},         -- match history: { bracket, spec, map, before, change, after, won, date, character, region }
+            games = {},
             display = {
                 show2v2     = true,
                 show3v3     = true,
-                showRBG     = true,
-                showShuffle = true,
-                showBlitz   = true,
+                show5v5     = Compat.has5v5 or false,
+                showRBG     = Compat.hasRBG or false,
+                showShuffle = Compat.hasSoloShuffle or false,
+                showBlitz   = Compat.hasBlitz or false,
                 showMMRDiff = true,
                 showGains   = true,
                 lock        = false,
@@ -63,43 +93,25 @@ function MMR:Init()
 end
 
 ------------------------------------------------------------
--- Get current rating/MMR for a bracket
+-- Get current rating/MMR for a bracket (uses Compat wrappers)
 -- Returns: rating, mmr, seasonWins, seasonLosses
 ------------------------------------------------------------
 function MMR:GetBracketData(bracketID)
     local rating, mmr, wins, losses = 0, 0, 0, 0
 
-    -- Solo Shuffle (bracket 6) and Blitz (bracket 8) use personal rating
-    if bracketID == 6 or bracketID == 8 then
-        if C_PvP and C_PvP.GetRatedSoloShuffleMMR and bracketID == 6 then
-            local ok, result = pcall(C_PvP.GetRatedSoloShuffleMMR)
-            if ok and result and type(result) == "number" and not issecretvalue(result) then
-                mmr = result
-            end
-        end
-        if C_PvP and C_PvP.GetRatedSoloRBGMMR and bracketID == 8 then
-            local ok, result = pcall(C_PvP.GetRatedSoloRBGMMR)
-            if ok and result and type(result) == "number" and not issecretvalue(result) then
-                mmr = result
-            end
-        end
+    -- Solo Shuffle (bracket 6) and Blitz (bracket 8) use dedicated MMR APIs
+    if bracketID == 6 then
+        mmr = Compat.GetSoloShuffleMMR()
+    elseif bracketID == 8 then
+        mmr = Compat.GetBlitzMMR()
     end
 
     -- Get rating info from standard API
-    if GetPersonalRatedInfo then
-        local ok, r, seasonPlayed, seasonWon, weeklyPlayed, weeklyWon, _mmr =
-            pcall(GetPersonalRatedInfo, bracketID)
-        if ok then
-            if r and type(r) == "number" and not issecretvalue(r) then rating = r end
-            if _mmr and type(_mmr) == "number" and not issecretvalue(_mmr) then mmr = _mmr end
-            if seasonPlayed and seasonWon
-                and type(seasonPlayed) == "number" and type(seasonWon) == "number"
-                and not issecretvalue(seasonPlayed) and not issecretvalue(seasonWon) then
-                wins = seasonWon
-                losses = seasonPlayed - seasonWon
-            end
-        end
-    end
+    local r, _mmr, w, l = Compat.GetPersonalRatedInfo(bracketID)
+    rating = r
+    if _mmr > 0 then mmr = _mmr end
+    wins = w
+    losses = l
 
     return rating, mmr, wins, losses
 end
@@ -210,20 +222,13 @@ function MMR:OnMatchComplete()
 
     -- Determine win/loss
     local won = false
-    if GetBattlefieldWinner then
-        local ok, winner = pcall(GetBattlefieldWinner)
-        if ok and winner == 0 then
-            won = true
-        end
+    local winner = Compat.GetBattlefieldWinner()
+    if winner == 0 then
+        won = true
     end
 
     -- Get spec
-    local spec = ""
-    local specIndex = GetSpecialization and GetSpecialization()
-    if specIndex then
-        local _, specName = GetSpecializationInfo(specIndex)
-        if specName then spec = specName end
-    end
+    local spec = Compat.GetPlayerSpec()
 
     -- Get map
     local mapName = GetZoneText and GetZoneText() or ""

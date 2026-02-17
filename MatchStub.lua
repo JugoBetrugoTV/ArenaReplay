@@ -230,17 +230,16 @@ function AR_MatchStub:SetPlayerEndData(name, rating, damageDone, healingDone, ra
 end
 
 ------------------------------------------------------------
--- Try to detect opponent spec via API (may be restricted in 12.0)
+-- Try to detect opponent spec via API (uses Compat layer)
 ------------------------------------------------------------
 function AR_MatchStub:SetOpponentSpec(guid, opponentIndex)
     local p = self.players[guid]
     if not p then return end
     if p.spec and p.spec ~= "" then return end
 
-    -- Try the standard API, handle potential secret values gracefully
-    local ok, specID = pcall(GetArenaOpponentSpec, opponentIndex)
-    if ok and specID and specID > 0 then
-        local _, specName = GetSpecializationInfoByID(specID)
+    local specID = AR.Compat.GetArenaOpponentSpec(opponentIndex)
+    if specID then
+        local specName = AR.Compat.GetSpecNameByID(specID)
         if specName then
             p.spec = specName
         end

@@ -2,9 +2,10 @@ local ADDON_NAME, AR = ...
 
 ------------------------------------------------------------
 -- ArenaReplay Core - Main addon logic
--- WoW Midnight 12.0 compatible
+-- Multi-version: Retail, TBC, Wrath, Cata, Classic Era
 ------------------------------------------------------------
 local L = LibStub("AceLocale-3.0"):GetLocale("ArenaReplay", true)
+local Compat = AR.Compat
 
 -- Create Ace addon
 local ArenaReplay = LibStub("AceAddon-3.0"):NewAddon("ArenaReplay", "AceEvent-3.0", "AceTimer-3.0", "AceComm-3.0", "AceSerializer-3.0")
@@ -73,29 +74,29 @@ function ArenaReplay:OnInitialize()
 end
 
 function ArenaReplay:OnEnable()
-    -- Register events
+    -- Register core events (all versions)
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
-    self:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
-    self:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
-    self:RegisterEvent("ARENA_OPPONENT_UPDATE")
     self:RegisterEvent("UNIT_HEALTH")
     self:RegisterEvent("UNIT_MAXHEALTH")
     self:RegisterEvent("UNIT_AURA")
-    self:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
-
-    -- Combat log
     self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 
-    -- Arena end
-    self:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
-    self:RegisterEvent("PVP_MATCH_COMPLETE")
+    -- Arena-specific events (only where arenas exist)
+    if Compat.hasArenas then
+        self:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
+        self:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
+        self:RegisterEvent("ARENA_OPPONENT_UPDATE")
+        self:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
+    end
 
-    -- Loading screen (for MMR display refresh)
-    self:RegisterEvent("LOADING_SCREEN_DISABLED")
-
-    -- Queue status (for MMR display visibility)
-    self:RegisterEvent("PVP_MATCH_STATE_CHANGED")
+    -- Retail-only events
+    if Compat.isRetail then
+        self:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
+        self:RegisterEvent("PVP_MATCH_COMPLETE")
+        self:RegisterEvent("LOADING_SCREEN_DISABLED")
+        self:RegisterEvent("PVP_MATCH_STATE_CHANGED")
+    end
 
     -- Slash command (just opens the main panel)
     SLASH_ARENAREPLAY1 = "/ar"
@@ -104,10 +105,13 @@ function ArenaReplay:OnEnable()
         AR_TableGUI:ShowMatchesFrame()
     end
 
-    -- Show MMR display on login
-    AR_MMRDisplay:Show()
+    -- Show MMR display on login (only if rated PvP exists)
+    if Compat.hasRatedPvP then
+        AR_MMRDisplay:Show()
+    end
 
-    print("|cffe392c5<ArenaReplay>|r v" .. AR.VERSION .. " " .. L.LOADED)
+    local tag = Compat.GetVersionTag()
+    print("|cffe392c5<ArenaReplay>|r v" .. AR.VERSION .. " (" .. tag .. ") " .. L.LOADED)
 end
 
 ------------------------------------------------------------
@@ -352,7 +356,7 @@ function ArenaReplay:PollHealth()
 end
 
 ------------------------------------------------------------
--- Aura tracking
+-- Aura tracking (supports both Retail 10.0+ and Classic APIs)
 ------------------------------------------------------------
 function ArenaReplay:UNIT_AURA(event, unit, updateInfo)
     if not currentMatch or not isFighting then return end
@@ -364,44 +368,39 @@ function ArenaReplay:UNIT_AURA(event, unit, updateInfo)
 
     local elapsed = GetTime() - arenaStartTime
 
-    -- Use the 12.0 aura API via C_UnitAuras if available
-    if updateInfo and updateInfo.addedAuras then
-        for _, aura in ipairs(updateInfo.addedAuras) do
-            local spellID = aura.spellId
-            local dur = aura.duration or 0
-            if spellID and spellID > 0 then
-                local auraType = aura.isHelpful and 1 or 2
-                local msg = string.format("%f,AA,%d,%d,%d,%f",
-                    elapsed, player.ID, spellID, auraType, dur)
-                currentMatch:RecordEvent(msg)
-                AR_Comm:BroadcastEvent(msg)
+    -- Retail 10.0+: use updateInfo with addedAuras/removedAuraInstanceIDs
+    if Compat.hasNewAuraAPI and updateInfo then
+        if updateInfo.addedAuras then
+            for _, aura in ipairs(updateInfo.addedAuras) do
+                local spellID = aura.spellId
+                local dur = aura.duration or 0
+                if spellID and spellID > 0 then
+                    local auraType = aura.isHelpful and 1 or 2
+                    local msg = string.format("%f,AA,%d,%d,%d,%f",
+                        elapsed, player.ID, spellID, auraType, dur)
+                    currentMatch:RecordEvent(msg)
+                    AR_Comm:BroadcastEvent(msg)
 
-                -- Track cooldown if it's a known CD spell
-                if AR.Data.COOLDOWN_SPELLS[spellID] then
-                    local cdMsg = string.format("%f,CD,%d,%d,%d",
-                        elapsed, player.ID, spellID, AR.Data.COOLDOWN_SPELLS[spellID])
-                    currentMatch:RecordEvent(cdMsg)
+                    if AR.Data.COOLDOWN_SPELLS[spellID] then
+                        local cdMsg = string.format("%f,CD,%d,%d,%d",
+                            elapsed, player.ID, spellID, AR.Data.COOLDOWN_SPELLS[spellID])
+                        currentMatch:RecordEvent(cdMsg)
+                    end
                 end
             end
         end
+        return
     end
 
-    if updateInfo and updateInfo.removedAuraInstanceIDs then
-        -- For removed auras, we need to look them up
-        -- In 12.0, we get AuraInstanceIDs; scan current auras to find what was removed
-        -- This is a simplified approach - record all current auras and diff
-        for _, instanceID in ipairs(updateInfo.removedAuraInstanceIDs) do
-            -- We don't have the spellID from the removal alone; we need to track it
-            -- For now, record a generic removal event
-            -- A more complete implementation would cache instanceID -> spellID mappings
-        end
-    end
+    -- Classic / TBC / Wrath / Cata: scan UnitBuff/UnitDebuff directly
+    -- Aura changes are detected via COMBAT_LOG_EVENT_UNFILTERED (SPELL_AURA_APPLIED/REMOVED)
+    -- UNIT_AURA on Classic doesn't give us specifics, so we rely on CLEU instead
 end
 
 ------------------------------------------------------------
--- Combat Log Event processing (WoW 12.0)
--- Note: In Midnight, CLEU may have restricted data for enemy actions.
--- We handle this gracefully with pcall and nil checks.
+-- Combat Log Event processing (all versions)
+-- In Retail 12.0+, CLEU may have restricted data for enemy actions.
+-- We handle this gracefully with nil checks.
 ------------------------------------------------------------
 function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
     if not currentMatch or not isFighting then return end
@@ -613,25 +612,15 @@ end
 function ArenaReplay:ReadScoreboard()
     if not currentMatch then return end
 
-    -- Try to read arena team results via C_PvP
-    -- In WoW 12.0, these APIs may be partially restricted
-    local winner = nil
-
-    -- Use GetBattlefieldWinner if available
-    if GetBattlefieldWinner then
-        local ok, result = pcall(GetBattlefieldWinner)
-        if ok then winner = result end
-    end
+    -- Use Compat wrappers for safe API access across versions
+    local winner = Compat.GetBattlefieldWinner()
 
     -- Read team info
     for teamIndex = 0, 1 do
-        local ok, name, oldRating, newRating, mmr
-        if GetBattlefieldTeamInfo then
-            ok, name, oldRating, newRating, mmr = pcall(GetBattlefieldTeamInfo, teamIndex)
-            if ok and name then
-                local diff = (newRating or 0) - (oldRating or 0)
-                currentMatch:SetTeam(teamIndex, name, newRating, diff, mmr)
-            end
+        local name, oldRating, newRating, mmr = Compat.GetBattlefieldTeamInfo(teamIndex)
+        if name then
+            local diff = (newRating or 0) - (oldRating or 0)
+            currentMatch:SetTeam(teamIndex, name, newRating, diff, mmr)
         end
     end
 
@@ -645,16 +634,11 @@ function ArenaReplay:ReadScoreboard()
     end
 
     -- Try to read per-player scoreboard
-    if GetNumBattlefieldScores then
-        local ok, numScores = pcall(GetNumBattlefieldScores)
-        if ok and numScores then
-            for i = 1, numScores do
-                local scoreOk, name, _, _, _, _, _, _, _, _, _, dmg, heal, _, _, _, rating, ratingChange, mmr, spec =
-                    pcall(GetBattlefieldScore, i)
-                if scoreOk and name then
-                    currentMatch:SetPlayerEndData(name, rating, dmg, heal, ratingChange, mmr, spec)
-                end
-            end
+    local numScores = Compat.GetNumBattlefieldScores()
+    for i = 1, numScores do
+        local name, rating, dmg, heal, ratingChange, mmr, spec = Compat.GetBattlefieldScore(i)
+        if name then
+            currentMatch:SetPlayerEndData(name, rating, dmg, heal, ratingChange, mmr, spec)
         end
     end
 end

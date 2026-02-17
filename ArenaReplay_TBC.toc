@@ -1,11 +1,10 @@
-## Interface: 120000
+## Interface: 20504
 ## Title: ArenaReplay
 ## Notes: Record, replay and broadcast arena matches. Includes MMR Tracker.
 ## Notes-deDE: Arena-Matches aufnehmen, abspielen und uebertragen. Mit MMR Tracker.
 ## Author: ArenaReplay Contributors
 ## Version: 1.2.0
 ## SavedVariables: ArenaReplayDB
-## IconTexture: Interface\Icons\Achievement_Arena_2v2_7
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
@@ -23,7 +22,7 @@ Compat\Compat.lua
 
 Util.lua
 Data.lua
-Data\Spells_Retail.lua
+Data\Spells_TBC.lua
 MatchStub.lua
 GUI\GUI.lua
 GUI\TableGUI.lua

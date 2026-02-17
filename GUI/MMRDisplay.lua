@@ -6,8 +6,7 @@ local _, AR = ...
 ------------------------------------------------------------
 AR_MMRDisplay = {}
 local Display = AR_MMRDisplay
-
-local issecretvalue = issecretvalue or function() return false end
+local Compat = AR.Compat
 
 local displayFrame = nil
 local lines = {}  -- bracket key -> FontString
@@ -70,6 +69,7 @@ end
 -- Update the on-screen display with current bracket data
 ------------------------------------------------------------
 function Display:Update()
+    if #AR_MMRTracker.BRACKET_ORDER == 0 then return end
     if not displayFrame then self:Create() end
     if not ArenaReplayDB.mmr then return end
 
@@ -77,16 +77,7 @@ function Display:Update()
 
     -- Visibility checks
     if settings.showOnlyInQueue then
-        -- Only show when queued
-        local queued = false
-        for i = 1, GetMaxBattlefieldID and GetMaxBattlefieldID() or 0 do
-            local status = GetBattlefieldStatus and GetBattlefieldStatus(i)
-            if status == "queued" or status == "confirm" then
-                queued = true
-                break
-            end
-        end
-        if not queued then
+        if not Compat.IsInPvPQueue() then
             displayFrame:Hide()
             return
         end
@@ -114,7 +105,7 @@ function Display:Update()
     for _, bracketID in ipairs(AR_MMRTracker.BRACKET_ORDER) do
         local data = bracketData[bracketID]
         local key = data.short
-        local showKey = "show" .. ({ [1]="2v2", [2]="3v3", [3]="RBG", [6]="Shuffle", [8]="Blitz" })[bracketID]
+        local showKey = "show" .. key
         local shouldShow = settings[showKey] ~= false
 
         if shouldShow then
@@ -183,7 +174,7 @@ function Display:Update()
                 for _, prevBID in ipairs(AR_MMRTracker.BRACKET_ORDER) do
                     if prevBID == bracketID then break end
                     local pk = AR_MMRTracker.BRACKETS[prevBID].short
-                    local pShowKey = "show" .. ({ [1]="2v2", [2]="3v3", [3]="RBG", [6]="Shuffle", [8]="Blitz" })[prevBID]
+                    local pShowKey = "show" .. pk
                     if settings[pShowKey] ~= false and lines[pk] then
                         prevKey = pk
                     end
@@ -221,6 +212,8 @@ end
 -- Show / Hide
 ------------------------------------------------------------
 function Display:Show()
+    -- No brackets on Classic Era, nothing to display
+    if #AR_MMRTracker.BRACKET_ORDER == 0 then return end
     if not displayFrame then self:Create() end
     self:Update()
 end

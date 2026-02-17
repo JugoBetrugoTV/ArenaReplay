@@ -26,7 +26,7 @@ function Util:Split(str, pat)
 end
 
 ------------------------------------------------------------
--- Class color lookup (WoW 12.0 classes)
+-- Class color lookup (all WoW versions)
 ------------------------------------------------------------
 local CLASS_COLORS = {
     DEATHKNIGHT  = { 0.77, 0.12, 0.23 },
@@ -76,12 +76,15 @@ function Util:GetTargetColor(data, useClassColor)
 end
 
 ------------------------------------------------------------
--- Mana-user detection (12.0 classes)
+-- Mana-user detection (all WoW versions)
+-- Classes that don't exist in a given version simply won't appear
 ------------------------------------------------------------
 local MANA_CLASSES = {
     PALADIN = true, PRIEST = true, DRUID = true,
     WARLOCK = true, MAGE = true, MONK = true,
     SHAMAN = true, EVOKER = true, DEMONHUNTER = false,
+    HUNTER = false, ROGUE = false, WARRIOR = false,
+    DEATHKNIGHT = false,
 }
 
 function Util:IsManaUser(class)
@@ -97,55 +100,18 @@ function Util:FormatTime(seconds)
 end
 
 ------------------------------------------------------------
--- Safe GetSpellInfo wrapper (12.0 compatible)
--- In 12.0, C_Spell.GetSpellInfo returns a table
+-- Spell info / Health wrappers (delegate to Compat layer)
 ------------------------------------------------------------
 function Util:GetSpellInfo(spellID)
-    if not spellID or spellID == 0 then
-        return nil, nil, nil
-    end
-    if C_Spell and C_Spell.GetSpellInfo then
-        local info = C_Spell.GetSpellInfo(spellID)
-        if info then
-            return info.name, info.iconID, info.castTime
-        end
-    end
-    -- fallback for older API
-    if GetSpellInfo then
-        local name, _, icon, castTime = GetSpellInfo(spellID)
-        return name, icon, castTime
-    end
-    return nil, nil, nil
+    return AR.Compat.GetSpellInfo(spellID)
 end
 
-------------------------------------------------------------
--- Safe check for Secret Values (12.0)
-------------------------------------------------------------
-function Util:IsSecretValue(val)
-    if C_Secrets and C_Secrets.HasSecretRestrictions then
-        -- In 12.0, secret values may be userdata or return special types
-        if type(val) == "userdata" then return true end
-    end
-    return val == nil
-end
-
-------------------------------------------------------------
--- Safe UnitHealth that handles secret values
-------------------------------------------------------------
 function Util:SafeUnitHealth(unit)
-    local ok, hp = pcall(UnitHealth, unit)
-    if ok and hp and not self:IsSecretValue(hp) then
-        return hp
-    end
-    return 0
+    return AR.Compat.SafeUnitHealth(unit)
 end
 
 function Util:SafeUnitHealthMax(unit)
-    local ok, hp = pcall(UnitHealthMax, unit)
-    if ok and hp and not self:IsSecretValue(hp) then
-        return hp
-    end
-    return 1
+    return AR.Compat.SafeUnitHealthMax(unit)
 end
 
 ------------------------------------------------------------

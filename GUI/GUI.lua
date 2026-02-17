@@ -6,6 +6,7 @@ local _, AR = ...
 AR_GUI = {}
 local GUI = AR_GUI
 local C = AR.GUI_CONST
+local Compat = AR.Compat
 
 local ADDON_PATH = "Interface\\Addons\\ArenaReplay\\"
 local BARTEXTURE = "Interface\\TargetingFrame\\UI-StatusBar"
@@ -23,23 +24,14 @@ local BACKDROP_TITLE = {
 }
 
 ------------------------------------------------------------
--- Helper: apply backdrop (12.0 uses BackdropTemplateMixin)
-------------------------------------------------------------
-local function ApplyBackdrop(frame, bd)
-    if frame.SetBackdrop then
-        frame:SetBackdrop(bd)
-    end
-end
-
-------------------------------------------------------------
 -- Main player frame (the replay viewer)
 ------------------------------------------------------------
 function GUI:CreatePlayerFrame(parent)
-    local f = CreateFrame("Frame", "ArenaReplayPlayerFrame", parent or UIParent, "BackdropTemplate")
+    local f = Compat.CreateFrameWithBackdrop("Frame", "ArenaReplayPlayerFrame", parent or UIParent)
     f:SetFrameStrata("MEDIUM")
     f:SetSize(C.PLAYER_FRAME_WIDTH, C.PLAYER_FRAME_HEIGHT)
     f:SetPoint("CENTER", 0, 0)
-    ApplyBackdrop(f, BACKDROP_MAIN)
+    Compat.ApplyBackdrop(f, BACKDROP_MAIN)
     f:SetBackdropColor(0, 0, 0, 0.85)
 
     f:SetMovable(true)
@@ -50,9 +42,9 @@ function GUI:CreatePlayerFrame(parent)
     f:SetClampedToScreen(true)
 
     -- Title bar
-    local title = CreateFrame("Frame", "$parentTitle", f, "BackdropTemplate")
+    local title = Compat.CreateFrameWithBackdrop("Frame", "$parentTitle", f)
     title:SetHeight(28)
-    ApplyBackdrop(title, BACKDROP_TITLE)
+    Compat.ApplyBackdrop(title, BACKDROP_TITLE)
     title:SetBackdropColor(0, 0, 0, 1)
     title:SetPoint("TOP", f, "TOP", 0, 16)
 
@@ -374,10 +366,10 @@ end
 -- Stats frame
 ------------------------------------------------------------
 function GUI:CreateStatsFrame(parent)
-    local f = CreateFrame("Frame", "ArenaReplayStats", parent, "BackdropTemplate")
+    local f = Compat.CreateFrameWithBackdrop("Frame", "ArenaReplayStats", parent)
     f:SetSize(C.PLAYER_FRAME_WIDTH - 20, 160)
     f:SetPoint("BOTTOM", parent, "BOTTOM", 0, 30)
-    ApplyBackdrop(f, BACKDROP_MAIN)
+    Compat.ApplyBackdrop(f, BACKDROP_MAIN)
     f:SetBackdropColor(0, 0, 0, 0.9)
     f:Hide()
     return f

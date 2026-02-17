@@ -2,10 +2,10 @@ local _, AR = ...
 
 ------------------------------------------------------------
 -- AR_TableGUI: Match list window with button toolbar
--- Replaces slash commands with clickable buttons
 ------------------------------------------------------------
 AR_TableGUI = {}
 local TableGUI = AR_TableGUI
+local Compat = AR.Compat
 
 local matchesFrame = nil
 local matchRows = {}
@@ -101,11 +101,9 @@ StaticPopupDialogs["ARENAREPLAY_RESET_MMR"] = {
 -- Button creation helpers
 ------------------------------------------------------------
 local function CreateToolbarButton(parent, text, width)
-    local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    local btn = Compat.CreateFrameWithBackdrop("Button", nil, parent)
     btn:SetSize(width, BTN_HEIGHT)
-    if btn.SetBackdrop then
-        btn:SetBackdrop(BACKDROP_BTN)
-    end
+    Compat.ApplyBackdrop(btn, BACKDROP_BTN)
     btn:SetBackdropColor(0.15, 0.15, 0.15, 0.9)
     btn:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
 
@@ -162,13 +160,11 @@ end
 -- Create the toolbar with all control buttons
 ------------------------------------------------------------
 local function CreateToolbar(parent)
-    local toolbar = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    local toolbar = Compat.CreateFrameWithBackdrop("Frame", nil, parent)
     toolbar:SetPoint("TOPLEFT", parent, "TOPLEFT", 6, -8)
     toolbar:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -6, -8)
     toolbar:SetHeight(TOOLBAR_HEIGHT)
-    if toolbar.SetBackdrop then
-        toolbar:SetBackdrop(BACKDROP_TOOLBAR)
-    end
+    Compat.ApplyBackdrop(toolbar, BACKDROP_TOOLBAR)
     toolbar:SetBackdropColor(0.08, 0.08, 0.08, 0.7)
     toolbar:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.5)
 
@@ -307,11 +303,11 @@ end
 -- Create the main matches window
 ------------------------------------------------------------
 function TableGUI:CreateMatchesFrame()
-    local f = CreateFrame("Frame", "ArenaReplayMatches", UIParent, "BackdropTemplate")
+    local f = Compat.CreateFrameWithBackdrop("Frame", "ArenaReplayMatches", UIParent)
     f:SetFrameStrata("HIGH")
     f:SetSize(FRAME_WIDTH, ROW_HEIGHT * MAX_VISIBLE + 80 + TOOLBAR_HEIGHT)
     f:SetPoint("CENTER", 0, 0)
-    if f.SetBackdrop then f:SetBackdrop(BACKDROP_MAIN) end
+    Compat.ApplyBackdrop(f, BACKDROP_MAIN)
     f:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
     f:SetMovable(true)
     f:EnableMouse(true)
@@ -321,9 +317,9 @@ function TableGUI:CreateMatchesFrame()
     f:SetClampedToScreen(true)
 
     -- Title
-    local title = CreateFrame("Frame", "$parentTitle", f, "BackdropTemplate")
+    local title = Compat.CreateFrameWithBackdrop("Frame", "$parentTitle", f)
     title:SetHeight(28)
-    if title.SetBackdrop then title:SetBackdrop(BACKDROP_TITLE) end
+    Compat.ApplyBackdrop(title, BACKDROP_TITLE)
     title:SetBackdropColor(0, 0, 0, 1)
     title:SetPoint("TOP", f, "TOP", 0, 16)
 
