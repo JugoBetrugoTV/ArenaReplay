@@ -25,16 +25,43 @@ local mixins = {}
 function mixins:RegisterEvent(event, method)
     if not eventMap[event] then
         eventMap[event] = {}
-        AceEvent.frame:RegisterEvent(event)
+        -- pcall to survive ADDON_ACTION_FORBIDDEN when the shared frame
+        -- is tainted (e.g. by a higher-version library erroring first).
+        local ok = pcall(AceEvent.frame.RegisterEvent, AceEvent.frame, event)
+        if not ok then
+            -- Create a clean fallback frame that is not tainted
+            if not AceEvent.fallback then
+                AceEvent.fallback = CreateFrame("Frame")
+                AceEvent.fallback:SetScript("OnEvent", function(_, ev, ...)
+                    if eventMap[ev] then
+                        for obj, m in pairs(eventMap[ev]) do
+                            if type(m) == "string" then
+                                if obj[m] then obj[m](obj, ev, ...) end
+                            elseif type(m) == "function" then
+                                m(ev, ...)
+                            end
+                        end
+                    end
+                end)
+            end
+            pcall(AceEvent.fallback.RegisterEvent, AceEvent.fallback, event)
+        end
     end
     eventMap[event][self] = method or event
+end
+
+local function safeUnregister(event)
+    pcall(AceEvent.frame.UnregisterEvent, AceEvent.frame, event)
+    if AceEvent.fallback then
+        pcall(AceEvent.fallback.UnregisterEvent, AceEvent.fallback, event)
+    end
 end
 
 function mixins:UnregisterEvent(event)
     if eventMap[event] then
         eventMap[event][self] = nil
         if not next(eventMap[event]) then
-            AceEvent.frame:UnregisterEvent(event)
+            safeUnregister(event)
             eventMap[event] = nil
         end
     end
@@ -44,7 +71,7 @@ function mixins:UnregisterAllEvents()
     for event, objs in pairs(eventMap) do
         objs[self] = nil
         if not next(objs) then
-            AceEvent.frame:UnregisterEvent(event)
+            safeUnregister(event)
             eventMap[event] = nil
         end
     end
