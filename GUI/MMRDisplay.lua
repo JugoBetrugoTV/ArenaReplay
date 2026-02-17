@@ -9,6 +9,16 @@ local L = LibStub("AceLocale-3.0"):GetLocale("ArenaReplay")
 AR_MMRDisplay = {}
 local Display = AR_MMRDisplay
 local Compat = AR.Compat
+local SharedMedia = LibStub("LibSharedMedia-3.0")
+
+-- Resolve font path from SharedMedia name or fallback
+local function GetFontPath(fontName)
+    if fontName and SharedMedia then
+        local path = SharedMedia:Fetch("font", fontName)
+        if path then return path end
+    end
+    return "Fonts\\FRIZQT__.TTF"
+end
 
 local displayFrame = nil
 local lines = {}  -- bracket key -> FontString
@@ -122,6 +132,7 @@ function Display:Update()
 
     local bracketData = AR_MMRTracker:GetAllBracketDisplayData()
     local fontSize = settings.fontSize or 13
+    local fontPath = GetFontPath(settings.fontFamily)
     local textColor = settings.textColor or { r = 1, g = 1, b = 1, a = 1 }
     local colorHex = string.format("|cff%02x%02x%02x",
         math.floor(textColor.r * 255),
@@ -144,7 +155,7 @@ function Display:Update()
             else
                 if not lines[key] then
                     local text = displayFrame:CreateFontString(nil, "OVERLAY")
-                    text:SetFont("Fonts\\FRIZQT__.TTF", fontSize, "OUTLINE")
+                    text:SetFont(fontPath, fontSize, "OUTLINE")
                     text:SetShadowOffset(1, -1)
                     text:SetShadowColor(0, 0, 0, 1)
                     text:SetJustifyH("LEFT")
@@ -152,7 +163,7 @@ function Display:Update()
                 end
 
                 local line = lines[key]
-                line:SetFont("Fonts\\FRIZQT__.TTF", fontSize, "OUTLINE")
+                line:SetFont(fontPath, fontSize, "OUTLINE")
 
                 -- Build display text
                 local label = data.label or "Rating"

@@ -7,8 +7,9 @@ local ADDON_NAME, AR = ...
 local L = LibStub("AceLocale-3.0"):GetLocale("ArenaReplay", true)
 local Compat = AR.Compat
 
--- Create Ace addon
-local ArenaReplay = LibStub("AceAddon-3.0"):NewAddon("ArenaReplay", "AceEvent-3.0", "AceTimer-3.0", "AceComm-3.0", "AceSerializer-3.0")
+-- Create Ace addon (with AceConsole for slash commands)
+local ArenaReplay = LibStub("AceAddon-3.0"):NewAddon("ArenaReplay",
+    "AceConsole-3.0", "AceEvent-3.0", "AceTimer-3.0", "AceComm-3.0", "AceSerializer-3.0")
 AR.Core = ArenaReplay
 
 -- State
@@ -21,13 +22,12 @@ local healthTimer    = nil
 local guidCache      = {}  -- player GUIDs discovered during the match
 
 ------------------------------------------------------------
--- Default saved variables
+-- Default saved variables (ArenaReplayDB: match data, global)
 ------------------------------------------------------------
 local DEFAULTS = {
     matches       = {},
     recording     = true,
     broadcasting  = false,
-    minimapAngle  = 220,
     defaults = {
         uniqueColor   = false,
         healthDisplay = 1,  -- 1=percent, 2=absolute, 3=deficit
@@ -37,10 +37,70 @@ local DEFAULTS = {
 }
 
 ------------------------------------------------------------
+-- AceDB defaults (ArenaReplaySettings: per-profile UI prefs)
+------------------------------------------------------------
+local DB_DEFAULTS = {
+    profile = {
+        minimap = { hide = false },
+        mmrDisplay = {
+            show2v2         = true,
+            show3v3         = true,
+            show5v5         = false,
+            showRBG         = false,
+            showShuffle     = false,
+            showBlitz       = false,
+            showMMRDiff     = true,
+            showGains       = true,
+            hideNoData      = false,
+            lock            = false,
+            position        = { "CENTER", "CENTER", 0, 200 },
+            fontSize        = 13,
+            fontFamily      = "Friz Quadrata TT",
+            textColor       = { r = 1, g = 1, b = 1, a = 1 },
+            showOnlyInQueue = false,
+            showInPVP       = false,
+            showInPVE       = true,
+            classColors     = true,
+            winLossIcons    = true,
+        },
+        display = {
+            uniqueColor   = false,
+            healthDisplay = 1,
+            shortAuras    = true,
+            commChannel   = "GUILD",
+        },
+    },
+}
+
+------------------------------------------------------------
+-- Sync AceDB profile settings -> ArenaReplayDB
+-- This bridges profile data to the existing code that reads
+-- ArenaReplayDB.mmr.display and ArenaReplayDB.defaults directly.
+------------------------------------------------------------
+local function SyncProfileToDB()
+    local profile = ArenaReplay.db and ArenaReplay.db.profile
+    if not profile then return end
+
+    -- Sync mmr display settings
+    if ArenaReplayDB and ArenaReplayDB.mmr then
+        for k, v in pairs(profile.mmrDisplay) do
+            ArenaReplayDB.mmr.display[k] = v
+        end
+    end
+
+    -- Sync general display settings
+    if ArenaReplayDB and ArenaReplayDB.defaults then
+        for k, v in pairs(profile.display) do
+            ArenaReplayDB.defaults[k] = v
+        end
+    end
+end
+
+------------------------------------------------------------
 -- Initialization
 ------------------------------------------------------------
 function ArenaReplay:OnInitialize()
-    -- Setup saved variables
+    -- Setup saved variables (ArenaReplayDB: match data)
     if not ArenaReplayDB then
         ArenaReplayDB = {}
     end
@@ -63,17 +123,66 @@ function ArenaReplay:OnInitialize()
         end
     end
 
+    -- Initialize AceDB (ArenaReplaySettings: per-profile prefs)
+    self.db = LibStub("AceDB-3.0"):New("ArenaReplaySettings", DB_DEFAULTS, true)
+    AR.db = self.db
+
+    -- Migrate: if existing ArenaReplayDB has display settings, import into profile
+    if ArenaReplayDB.mmr and ArenaReplayDB.mmr.display then
+        local src = ArenaReplayDB.mmr.display
+        local dst = self.db.profile.mmrDisplay
+        for k, v in pairs(src) do
+            if dst[k] ~= nil and type(v) == type(dst[k]) then
+                dst[k] = v
+            elseif type(v) ~= "table" then
+                dst[k] = v
+            end
+        end
+    end
+
+    -- Sync profile -> ArenaReplayDB on profile change
+    self.db.RegisterCallback(self, "OnProfileChanged", "OnProfileSync")
+    self.db.RegisterCallback(self, "OnProfileCopied", "OnProfileSync")
+    self.db.RegisterCallback(self, "OnProfileReset", "OnProfileSync")
+
     -- Initialize communication
     AR_Comm:Init(self)
 
     -- Initialize MMR tracker
     AR_MMRTracker:Init()
 
+    -- Initial profile sync
+    SyncProfileToDB()
+
     -- Initialize options panel
     AR_Options:Init()
 
-    -- Create minimap button
+    -- Create minimap button (LibDBIcon)
     AR_MinimapButton:Create()
+end
+
+function ArenaReplay:OnProfileSync()
+    SyncProfileToDB()
+    AR_MMRDisplay:Update()
+end
+
+------------------------------------------------------------
+-- Slash command handler (via AceConsole)
+------------------------------------------------------------
+function ArenaReplay:OnSlashCommand(input)
+    input = (input or ""):trim():lower()
+    if input == "settings" or input == "config" or input == "options" then
+        AR_Options:Open()
+    elseif input == "mmr" then
+        AR_MMRDisplay:Toggle()
+    elseif input == "history" or input == "table" then
+        AR_MMRTable:Toggle()
+    elseif input == "minimap" then
+        self.db.profile.minimap.hide = not self.db.profile.minimap.hide
+        AR_MinimapButton:Refresh()
+    else
+        AR_TableGUI:ShowMatchesFrame()
+    end
 end
 
 function ArenaReplay:OnEnable()
@@ -101,21 +210,9 @@ function ArenaReplay:OnEnable()
         self:RegisterEvent("PVP_MATCH_STATE_CHANGED")
     end
 
-    -- Slash commands
-    SLASH_ARENAREPLAY1 = "/ar"
-    SLASH_ARENAREPLAY2 = "/arenareplay"
-    SlashCmdList["ARENAREPLAY"] = function(msg)
-        msg = (msg or ""):trim():lower()
-        if msg == "settings" or msg == "config" or msg == "options" then
-            AR_Options:Open()
-        elseif msg == "mmr" then
-            AR_MMRDisplay:Toggle()
-        elseif msg == "history" or msg == "table" then
-            AR_MMRTable:Toggle()
-        else
-            AR_TableGUI:ShowMatchesFrame()
-        end
-    end
+    -- Slash commands via AceConsole
+    self:RegisterChatCommand("ar", "OnSlashCommand")
+    self:RegisterChatCommand("arenareplay", "OnSlashCommand")
 
     -- Show MMR display on login (only if rated PvP exists)
     if Compat.hasRatedPvP then

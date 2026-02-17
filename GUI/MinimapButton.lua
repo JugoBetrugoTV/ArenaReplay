@@ -1,90 +1,75 @@
 local _, AR = ...
+local L = LibStub("AceLocale-3.0"):GetLocale("ArenaReplay")
 
 ------------------------------------------------------------
--- AR_MinimapButton: Minimap icon for ArenaReplay
--- Click to open the main panel (match list + controls)
+-- AR_MinimapButton: Minimap icon via LibDBIcon + LibDataBroker
+-- Left-click: open main panel
+-- Shift-click: toggle MMR display
+-- Ctrl-click: toggle MMR history table
+-- Right-click: open settings
 ------------------------------------------------------------
 AR_MinimapButton = {}
 local MinimapBtn = AR_MinimapButton
 
-local button = nil
-local ICON_TEXTURE = "Interface\\Icons\\Achievement_Arena_2v2_7"
+local LDB = LibStub("LibDataBroker-1.1")
+local LDBIcon = LibStub("LibDBIcon-1.0")
+
+local dataObj = nil
 
 function MinimapBtn:Create()
-    if button then return end
+    if dataObj then return end
 
-    local f = CreateFrame("Button", "ArenaReplayMinimapButton", Minimap)
-    f:SetSize(32, 32)
-    f:SetFrameStrata("MEDIUM")
-    f:SetFrameLevel(8)
-    f:SetClampedToScreen(true)
-    f:SetMovable(true)
+    dataObj = LDB:NewDataObject("ArenaReplay", {
+        type  = "launcher",
+        icon  = "Interface\\Icons\\Achievement_Arena_2v2_7",
+        label = "ArenaReplay",
 
-    -- Icon
-    local overlay = f:CreateTexture(nil, "OVERLAY")
-    overlay:SetSize(53, 53)
-    overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-    overlay:SetPoint("TOPLEFT")
-
-    local icon = f:CreateTexture(nil, "BACKGROUND")
-    icon:SetSize(20, 20)
-    icon:SetTexture(ICON_TEXTURE)
-    icon:SetPoint("CENTER", f, "CENTER", 0, 1)
-
-    -- Positioning on minimap
-    local angle = ArenaReplayDB and ArenaReplayDB.minimapAngle or 220
-    f:SetPoint("CENTER", Minimap, "CENTER",
-        52 * math.cos(math.rad(angle)),
-        52 * math.sin(math.rad(angle)))
-
-    -- Drag to reposition
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function(self)
-        self:SetScript("OnUpdate", function(self)
-            local mx, my = Minimap:GetCenter()
-            local cx, cy = GetCursorPosition()
-            local scale = Minimap:GetEffectiveScale()
-            cx, cy = cx / scale, cy / scale
-            local a = math.deg(math.atan2(cy - my, cx - mx))
-            self:SetPoint("CENTER", Minimap, "CENTER",
-                52 * math.cos(math.rad(a)),
-                52 * math.sin(math.rad(a)))
-            if ArenaReplayDB then
-                ArenaReplayDB.minimapAngle = a
+        OnClick = function(_, button)
+            if button == "LeftButton" then
+                if IsShiftKeyDown() then
+                    AR_MMRDisplay:Toggle()
+                elseif IsControlKeyDown() then
+                    AR_MMRTable:Toggle()
+                else
+                    if AR_TableGUI:IsShowing() then
+                        AR_TableGUI:HideMatchesFrame()
+                    else
+                        AR_TableGUI:ShowMatchesFrame()
+                    end
+                end
+            elseif button == "RightButton" then
+                AR_Options:Open()
             end
-        end)
-    end)
-    f:SetScript("OnDragStop", function(self)
-        self:SetScript("OnUpdate", nil)
-    end)
+        end,
 
-    -- Click handler: toggle the main panel
-    f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    f:SetScript("OnClick", function()
-        if AR_TableGUI:IsShowing() then
-            AR_TableGUI:HideMatchesFrame()
-        else
-            AR_TableGUI:ShowMatchesFrame()
-        end
-    end)
+        OnTooltipShow = function(tt)
+            tt:AddLine("ArenaReplay", 0.89, 0.57, 0.77)
+            tt:AddLine(" ")
+            tt:AddLine("|cffffffffLeft-Click:|r " .. L.BTN_OPEN_PANEL, 0.8, 0.8, 0.8)
+            tt:AddLine("|cffffffffShift-Click:|r " .. L.BTN_MMR_DISPLAY, 0.8, 0.8, 0.8)
+            tt:AddLine("|cffffffffCtrl-Click:|r " .. L.BTN_MMR_HISTORY, 0.8, 0.8, 0.8)
+            tt:AddLine("|cffffffffRight-Click:|r " .. L.OPT_MMR_SETTINGS, 0.8, 0.8, 0.8)
+        end,
+    })
 
-    f:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:AddLine("ArenaReplay", 1, 1, 1)
-        GameTooltip:AddLine("Click to open", 0.8, 0.8, 0.8)
-        GameTooltip:Show()
-    end)
-    f:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-
-    button = f
+    -- Register with LibDBIcon (uses AceDB profile for hide/position)
+    local db = AR.db and AR.db.profile or { minimap = { hide = false } }
+    LDBIcon:Register("ArenaReplay", dataObj, db.minimap)
 end
 
 function MinimapBtn:Show()
-    if button then button:Show() end
+    LDBIcon:Show("ArenaReplay")
 end
 
 function MinimapBtn:Hide()
-    if button then button:Hide() end
+    LDBIcon:Hide("ArenaReplay")
+end
+
+function MinimapBtn:Refresh()
+    if not AR.db then return end
+    if AR.db.profile.minimap.hide then
+        LDBIcon:Hide("ArenaReplay")
+    else
+        LDBIcon:Show("ArenaReplay")
+    end
 end
