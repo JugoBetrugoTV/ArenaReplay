@@ -2,7 +2,7 @@ local ADDON_NAME, AR = ...
 
 ------------------------------------------------------------
 -- ArenaReplay Core - Main addon logic
--- Multi-version: Retail, TBC, Wrath, Cata, Classic Era
+-- Multi-version: Midnight, BCC Anniversary, MoP Classic, Classic Era
 ------------------------------------------------------------
 local L = LibStub("AceLocale-3.0"):GetLocale("ArenaReplay", true)
 local Compat = AR.Compat
@@ -515,7 +515,7 @@ function ArenaReplay:UNIT_AURA(event, unit, updateInfo)
         return
     end
 
-    -- Classic / TBC / Wrath / Cata: scan UnitBuff/UnitDebuff directly
+    -- Classic / TBC / MoP: scan UnitBuff/UnitDebuff directly
     -- Aura changes are detected via COMBAT_LOG_EVENT_UNFILTERED (SPELL_AURA_APPLIED/REMOVED)
     -- UNIT_AURA on Classic doesn't give us specifics, so we rely on CLEU instead
 end

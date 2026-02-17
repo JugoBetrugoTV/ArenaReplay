@@ -23,6 +23,7 @@ local ALL_BRACKETS = {
 
 -- Build version-specific bracket tables
 if Compat.isRetail then
+    -- Midnight: 2v2, 3v3, RBG, Solo Shuffle, Blitz
     MMR.BRACKETS = {
         [1] = ALL_BRACKETS[1],
         [2] = ALL_BRACKETS[2],
@@ -31,7 +32,8 @@ if Compat.isRetail then
         [8] = ALL_BRACKETS[8],
     }
     MMR.BRACKET_ORDER = { 1, 2, 3, 6, 8 }
-elseif Compat.isCata then
+elseif Compat.isMoP then
+    -- MoP Classic: 2v2, 3v3, 5v5, RBG
     MMR.BRACKETS = {
         [1] = ALL_BRACKETS[1],
         [2] = ALL_BRACKETS[2],
@@ -39,7 +41,8 @@ elseif Compat.isCata then
         [3] = ALL_BRACKETS[3],
     }
     MMR.BRACKET_ORDER = { 1, 2, 4, 3 }
-elseif Compat.isTBC or Compat.isWrath then
+elseif Compat.isTBC then
+    -- BCC Anniversary: 2v2, 3v3, 5v5
     MMR.BRACKETS = {
         [1] = ALL_BRACKETS[1],
         [2] = ALL_BRACKETS[2],

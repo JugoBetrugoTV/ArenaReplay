@@ -10,6 +10,11 @@ local C = AR.Compat
 
 ------------------------------------------------------------
 -- Version detection
+-- Supported clients:
+--   Midnight (Retail)         = WOW_PROJECT_MAINLINE (1)
+--   BCC Anniversary Edition   = WOW_PROJECT_BURNING_CRUSADE_CLASSIC (5)
+--   MoP Classic               = WOW_PROJECT_MISTS_CLASSIC (19)
+--   Classic Era (Vanilla)     = WOW_PROJECT_CLASSIC (2)
 ------------------------------------------------------------
 local _, build, _, tocVersion = GetBuildInfo()
 tocVersion = tocVersion or 0
@@ -19,10 +24,9 @@ local projectID = WOW_PROJECT_ID or 1
 C.isRetail     = (projectID == (WOW_PROJECT_MAINLINE or 1))
 C.isClassicEra = (projectID == (WOW_PROJECT_CLASSIC or 2))
 C.isTBC        = (projectID == (WOW_PROJECT_BURNING_CRUSADE_CLASSIC or 5))
-C.isWrath      = (projectID == (WOW_PROJECT_WRATH_CLASSIC or 11))
-C.isCata       = (projectID == (WOW_PROJECT_CATACLYSM_CLASSIC or 14))
+C.isMoP        = (projectID == (WOW_PROJECT_MISTS_CLASSIC or 19))
 
--- Catch-all for unknown future Classic versions (MoP Classic etc.)
+-- Catch-all for any Classic client
 C.isClassicAny = not C.isRetail
 
 -- Interface version number for fine-grained checks
@@ -35,10 +39,11 @@ C.hasArenas         = not C.isClassicEra
 C.hasRatedPvP       = C.hasArenas
 C.hasSoloShuffle    = C.isRetail
 C.hasBlitz          = C.isRetail
-C.hasRBG            = C.isRetail or C.isCata
-C.has5v5            = C.isTBC or C.isWrath
+C.hasRBG            = C.isRetail or C.isMoP
+C.has5v5            = C.isTBC or C.isMoP
+C.hasSpecAPI        = C.isRetail or C.isMoP  -- GetSpecialization() exists in MoP+
 C.hasSecretValues   = C.isRetail and (tocVersion >= 110000)
-C.hasBackdropMixin  = C.isRetail or (C.isCata and tocVersion >= 40400)
+C.hasBackdropMixin  = C.isRetail
 C.hasC_Spell        = C.isRetail and (tocVersion >= 110000)
 C.hasC_PvP          = C.isRetail
 C.hasNewAuraAPI     = C.isRetail and (tocVersion >= 100000)
@@ -48,10 +53,9 @@ C.hasC_Map          = (C_Map and C_Map.GetBestMapForUnit) ~= nil
 -- Version string for display
 ------------------------------------------------------------
 function C.GetVersionTag()
-    if C.isRetail     then return "Retail" end
-    if C.isCata       then return "Cata" end
-    if C.isWrath      then return "Wrath" end
-    if C.isTBC        then return "TBC" end
+    if C.isRetail     then return "Midnight" end
+    if C.isMoP        then return "MoP Classic" end
+    if C.isTBC        then return "BCC Anniversary" end
     if C.isClassicEra then return "Classic" end
     return "Unknown"
 end
@@ -228,7 +232,7 @@ function C.GetPlayerSpec()
             return specName or ""
         end
     end
-    -- Classic / TBC: no spec API, use talent tree detection
+    -- Classic Era / BCC Anniversary: no spec API
     return ""
 end
 
