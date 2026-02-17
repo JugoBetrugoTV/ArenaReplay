@@ -1,0 +1,38 @@
+## Interface: 120000
+## Title: ArenaReplay
+## Notes: Record, replay and broadcast arena matches. Inspired by AAV (atrox Arena Viewer), rebuilt for WoW Midnight 12.0.
+## Notes-deDE: Arena-Matches aufnehmen, abspielen und uebertragen. Inspiriert von AAV, neu gebaut fuer WoW Midnight 12.0.
+## Author: ArenaReplay Contributors
+## Version: 1.0.0
+## SavedVariables: ArenaReplayDB
+## IconTexture: Interface\Icons\Achievement_Arena_2v2_7
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\AceAddon-3.0\AceAddon-3.0.lua
+Libs\AceEvent-3.0\AceEvent-3.0.lua
+Libs\AceComm-3.0\AceComm-3.0.lua
+Libs\AceTimer-3.0\AceTimer-3.0.lua
+Libs\AceSerializer-3.0\AceSerializer-3.0.lua
+Libs\AceLocale-3.0\AceLocale-3.0.lua
+
+Locale\enUS.lua
+Locale\deDE.lua
+
+Util.lua
+Data.lua
+MatchStub.lua
+GUI\GUI.lua
+GUI\TableGUI.lua
+GUI\MinimapButton.lua
+GUI\CombatText.lua
+GUI\Skills.lua
+GUI\Aura.lua
+GUI\Crowd.lua
+GUI\Cooldown.lua
+GUI\Entity.lua
+GUI\Seeker.lua
+GUI\TeamStats.lua
+PlayStub.lua
+Comm.lua
+Core.lua

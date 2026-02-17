@@ -1,0 +1,745 @@
+local ADDON_NAME, AR = ...
+
+------------------------------------------------------------
+-- ArenaReplay Core - Main addon logic
+-- WoW Midnight 12.0 compatible
+------------------------------------------------------------
+local L = LibStub("AceLocale-3.0"):GetLocale("ArenaReplay", true)
+
+-- Create Ace addon
+local ArenaReplay = LibStub("AceAddon-3.0"):NewAddon("ArenaReplay", "AceEvent-3.0", "AceTimer-3.0", "AceComm-3.0", "AceSerializer-3.0")
+AR.Core = ArenaReplay
+
+-- State
+local currentMatch   = nil  -- AR_MatchStub during recording
+local playStub       = nil  -- AR_PlayStub during playback
+local isInArena      = false
+local isFighting     = false
+local arenaStartTime = 0
+local healthTimer    = nil
+local guidCache      = {}  -- player GUIDs discovered during the match
+
+------------------------------------------------------------
+-- Default saved variables
+------------------------------------------------------------
+local DEFAULTS = {
+    matches       = {},
+    recording     = true,
+    broadcasting  = false,
+    minimapAngle  = 220,
+    defaults = {
+        uniqueColor   = false,
+        healthDisplay = 1,  -- 1=percent, 2=absolute, 3=deficit
+        shortAuras    = true,
+        commChannel   = "GUILD",
+    },
+}
+
+------------------------------------------------------------
+-- Initialization
+------------------------------------------------------------
+function ArenaReplay:OnInitialize()
+    -- Setup saved variables
+    if not ArenaReplayDB then
+        ArenaReplayDB = {}
+    end
+    for k, v in pairs(DEFAULTS) do
+        if ArenaReplayDB[k] == nil then
+            if type(v) == "table" then
+                ArenaReplayDB[k] = {}
+                for k2, v2 in pairs(v) do
+                    ArenaReplayDB[k][k2] = v2
+                end
+            else
+                ArenaReplayDB[k] = v
+            end
+        end
+    end
+    if not ArenaReplayDB.defaults then
+        ArenaReplayDB.defaults = {}
+        for k, v in pairs(DEFAULTS.defaults) do
+            ArenaReplayDB.defaults[k] = v
+        end
+    end
+
+    -- Initialize communication
+    AR_Comm:Init(self)
+
+    -- Create minimap button
+    AR_MinimapButton:Create()
+end
+
+function ArenaReplay:OnEnable()
+    -- Register events
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD")
+    self:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
+    self:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
+    self:RegisterEvent("ARENA_OPPONENT_UPDATE")
+    self:RegisterEvent("UNIT_HEALTH")
+    self:RegisterEvent("UNIT_MAXHEALTH")
+    self:RegisterEvent("UNIT_AURA")
+    self:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
+
+    -- Combat log
+    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+
+    -- Arena end
+    self:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
+    self:RegisterEvent("PVP_MATCH_COMPLETE")
+
+    -- Slash commands
+    SLASH_ARENAREPLAY1 = "/ar"
+    SLASH_ARENAREPLAY2 = "/arenareplay"
+    SlashCmdList["ARENAREPLAY"] = function(msg)
+        self:SlashCommand(msg)
+    end
+
+    print("|cffe392c5<ArenaReplay>|r v" .. AR.VERSION .. " " .. L.LOADED)
+end
+
+------------------------------------------------------------
+-- Slash command handler
+------------------------------------------------------------
+function ArenaReplay:SlashCommand(msg)
+    msg = string.lower(msg or "")
+
+    if msg == "ui" or msg == "" then
+        AR_TableGUI:ShowMatchesFrame()
+
+    elseif msg == "broadcast" then
+        self:ToggleBroadcast()
+
+    elseif msg == "record" then
+        self:ToggleRecording()
+
+    elseif msg == "lookup" then
+        AR_Comm:Lookup()
+
+    elseif string.find(msg, "^connect%s") then
+        local name = string.sub(msg, 9)
+        if name and name ~= "" then
+            AR_Comm:ConnectTo(name)
+        end
+
+    elseif msg == "spectators" then
+        local specs = AR_Comm:GetSpectators()
+        print("|cffe392c5<ArenaReplay>|r Spectators (" .. #specs .. "):")
+        for _, name in ipairs(specs) do
+            print("  - " .. name)
+        end
+
+    elseif msg == "delete all" then
+        ArenaReplayDB.matches = {}
+        AR_TableGUI:RefreshIfShowing()
+        print("|cffe392c5<ArenaReplay>|r All matches deleted.")
+
+    elseif msg == "play" then
+        if #ArenaReplayDB.matches > 0 then
+            self:PlayMatch(1)
+        else
+            print("|cffe392c5<ArenaReplay>|r " .. L.CONF_NOMATCHES)
+        end
+
+    elseif msg == "stop" then
+        if playStub then playStub:Close() end
+
+    else
+        print("|cffe392c5<ArenaReplay>|r " .. L.HELP_LINE1)
+        print("  " .. L.HELP_LINE2)
+        print("  " .. L.HELP_LINE3)
+        print("  " .. L.HELP_LINE4)
+        print("  " .. L.HELP_LINE5)
+        print("  " .. L.HELP_LINE6)
+        print("  " .. L.HELP_LINE7)
+    end
+end
+
+------------------------------------------------------------
+-- Toggle functions
+------------------------------------------------------------
+function ArenaReplay:ToggleBroadcast()
+    if isInArena then
+        print("|cffe392c5<ArenaReplay>|r " .. L.PROHIBITED_ACTION)
+        return
+    end
+    ArenaReplayDB.broadcasting = not ArenaReplayDB.broadcasting
+    if ArenaReplayDB.broadcasting then
+        print("|cffe392c5<ArenaReplay>|r " .. L.BROADCAST_ON)
+    else
+        print("|cffe392c5<ArenaReplay>|r " .. L.BROADCAST_OFF)
+    end
+end
+
+function ArenaReplay:ToggleRecording()
+    if isInArena then
+        print("|cffe392c5<ArenaReplay>|r " .. L.PROHIBITED_ACTION)
+        return
+    end
+    ArenaReplayDB.recording = not ArenaReplayDB.recording
+    if ArenaReplayDB.recording then
+        print("|cffe392c5<ArenaReplay>|r " .. L.RECORDING_ON)
+    else
+        print("|cffe392c5<ArenaReplay>|r " .. L.RECORDING_OFF)
+    end
+end
+
+------------------------------------------------------------
+-- Zone detection
+------------------------------------------------------------
+function ArenaReplay:PLAYER_ENTERING_WORLD()
+    self:CheckArenaZone()
+end
+
+function ArenaReplay:ZONE_CHANGED_NEW_AREA()
+    self:CheckArenaZone()
+end
+
+function ArenaReplay:CheckArenaZone()
+    local inInstance, instanceType = IsInInstance()
+    local wasInArena = isInArena
+    isInArena = (inInstance and instanceType == "arena")
+
+    if isInArena and not wasInArena then
+        self:OnEnterArena()
+    elseif not isInArena and wasInArena then
+        self:OnLeaveArena()
+    end
+end
+
+------------------------------------------------------------
+-- Arena entry / exit
+------------------------------------------------------------
+function ArenaReplay:OnEnterArena()
+    if not ArenaReplayDB.recording then return end
+
+    currentMatch = AR_MatchStub:New()
+    guidCache = {}
+    isFighting = false
+    arenaStartTime = GetTime()
+
+    -- Scan existing party members
+    self:ScanParty()
+
+    -- Start health polling timer
+    if healthTimer then self:CancelTimer(healthTimer) end
+    healthTimer = self:ScheduleRepeatingTimer("PollHealth", 0.5)
+
+    -- Broadcast start
+    AR_Comm:BroadcastStart(currentMatch)
+end
+
+function ArenaReplay:OnLeaveArena()
+    if healthTimer then
+        self:CancelTimer(healthTimer)
+        healthTimer = nil
+    end
+
+    if currentMatch and isFighting then
+        self:FinalizeMatch()
+    end
+
+    currentMatch = nil
+    isInArena = false
+    isFighting = false
+end
+
+------------------------------------------------------------
+-- Scan party/arena for players
+------------------------------------------------------------
+function ArenaReplay:ScanParty()
+    if not currentMatch then return end
+
+    -- Scan friendly team (party/raid)
+    local units = { "player" }
+    for i = 1, 4 do table.insert(units, "party" .. i) end
+
+    for _, unit in ipairs(units) do
+        if UnitExists(unit) and UnitIsPlayer(unit) then
+            local guid, _ = currentMatch:AddPlayer(unit, 1) -- team 1 = friendly
+            if guid then guidCache[guid] = unit end
+        end
+    end
+
+    -- Scan enemy team (arena units)
+    for i = 1, 5 do
+        local unit = "arena" .. i
+        if UnitExists(unit) then
+            local guid, _ = currentMatch:AddPlayer(unit, 0) -- team 0 = hostile
+            if guid then guidCache[guid] = unit end
+            -- Try to get spec (may be restricted in 12.0)
+            currentMatch:SetOpponentSpec(UnitGUID(unit), i)
+        end
+    end
+
+    currentMatch:SetBracket()
+end
+
+------------------------------------------------------------
+-- Arena countdown / fight start detection
+------------------------------------------------------------
+function ArenaReplay:CHAT_MSG_BG_SYSTEM_NEUTRAL(event, msg)
+    if not isInArena or not currentMatch then return end
+
+    if msg == L.ARENA_START or msg:find("The Arena battle has begun") then
+        isFighting = true
+        arenaStartTime = GetTime()
+        self:ScanParty() -- re-scan to catch late-joiners
+    end
+end
+
+------------------------------------------------------------
+-- Arena opponent updates
+------------------------------------------------------------
+function ArenaReplay:ARENA_OPPONENT_UPDATE(event, unit, updateType)
+    if not currentMatch then return end
+
+    if updateType == "seen" or updateType == "cleared" then
+        if UnitExists(unit) then
+            local guid, _ = currentMatch:AddPlayer(unit, 0)
+            if guid then guidCache[guid] = unit end
+
+            -- Try to detect spec
+            local index = tonumber(unit:match("arena(%d+)"))
+            if index and guid then
+                currentMatch:SetOpponentSpec(guid, index)
+            end
+        end
+    end
+end
+
+function ArenaReplay:ARENA_PREP_OPPONENT_SPECIALIZATIONS()
+    if not currentMatch then return end
+    for i = 1, 5 do
+        local unit = "arena" .. i
+        if UnitExists(unit) then
+            local guid = UnitGUID(unit)
+            if guid then
+                currentMatch:SetOpponentSpec(guid, i)
+            end
+        end
+    end
+end
+
+------------------------------------------------------------
+-- Update battlefield status (queue/entering detection)
+------------------------------------------------------------
+function ArenaReplay:UPDATE_BATTLEFIELD_STATUS()
+    -- Used for detecting queue pops; zone check handles the rest
+end
+
+------------------------------------------------------------
+-- Health events
+------------------------------------------------------------
+function ArenaReplay:UNIT_HEALTH(event, unit)
+    self:RecordHealthUpdate(unit)
+end
+
+function ArenaReplay:UNIT_MAXHEALTH(event, unit)
+    self:RecordHealthUpdate(unit)
+end
+
+function ArenaReplay:RecordHealthUpdate(unit)
+    if not currentMatch or not isFighting then return end
+
+    local guid = UnitGUID(unit)
+    if not guid then return end
+
+    local player = currentMatch.players[guid]
+    if not player then return end
+
+    local flags = currentMatch:GetHealthChangeFlags(unit)
+    if flags > 0 then
+        local elapsed = GetTime() - arenaStartTime
+        local msg = string.format("%f,HP,%d,%d,%d",
+            elapsed, player.ID, player.hp, player.hpMax)
+        currentMatch:RecordEvent(msg)
+        AR_Comm:BroadcastEvent(msg)
+    end
+end
+
+------------------------------------------------------------
+-- Health polling (fallback for units that don't trigger events)
+------------------------------------------------------------
+function ArenaReplay:PollHealth()
+    if not currentMatch or not isFighting then return end
+
+    local units = { "player" }
+    for i = 1, 4 do table.insert(units, "party" .. i) end
+    for i = 1, 5 do table.insert(units, "arena" .. i) end
+
+    for _, unit in ipairs(units) do
+        if UnitExists(unit) then
+            self:RecordHealthUpdate(unit)
+        end
+    end
+end
+
+------------------------------------------------------------
+-- Aura tracking
+------------------------------------------------------------
+function ArenaReplay:UNIT_AURA(event, unit, updateInfo)
+    if not currentMatch or not isFighting then return end
+
+    local guid = UnitGUID(unit)
+    if not guid then return end
+    local player = currentMatch.players[guid]
+    if not player then return end
+
+    local elapsed = GetTime() - arenaStartTime
+
+    -- Use the 12.0 aura API via C_UnitAuras if available
+    if updateInfo and updateInfo.addedAuras then
+        for _, aura in ipairs(updateInfo.addedAuras) do
+            local spellID = aura.spellId
+            local dur = aura.duration or 0
+            if spellID and spellID > 0 then
+                local auraType = aura.isHelpful and 1 or 2
+                local msg = string.format("%f,AA,%d,%d,%d,%f",
+                    elapsed, player.ID, spellID, auraType, dur)
+                currentMatch:RecordEvent(msg)
+                AR_Comm:BroadcastEvent(msg)
+
+                -- Track cooldown if it's a known CD spell
+                if AR.Data.COOLDOWN_SPELLS[spellID] then
+                    local cdMsg = string.format("%f,CD,%d,%d,%d",
+                        elapsed, player.ID, spellID, AR.Data.COOLDOWN_SPELLS[spellID])
+                    currentMatch:RecordEvent(cdMsg)
+                end
+            end
+        end
+    end
+
+    if updateInfo and updateInfo.removedAuraInstanceIDs then
+        -- For removed auras, we need to look them up
+        -- In 12.0, we get AuraInstanceIDs; scan current auras to find what was removed
+        -- This is a simplified approach - record all current auras and diff
+        for _, instanceID in ipairs(updateInfo.removedAuraInstanceIDs) do
+            -- We don't have the spellID from the removal alone; we need to track it
+            -- For now, record a generic removal event
+            -- A more complete implementation would cache instanceID -> spellID mappings
+        end
+    end
+end
+
+------------------------------------------------------------
+-- Combat Log Event processing (WoW 12.0)
+-- Note: In Midnight, CLEU may have restricted data for enemy actions.
+-- We handle this gracefully with pcall and nil checks.
+------------------------------------------------------------
+function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
+    if not currentMatch or not isFighting then return end
+
+    local timestamp, subevent, hideCaster,
+          sourceGUID, sourceName, sourceFlags, sourceRaidFlags,
+          destGUID, destName, destFlags, destRaidFlags = CombatLogGetCurrentEventInfo()
+
+    -- Safely extract remaining args (position varies by subevent)
+    local args = { select(12, CombatLogGetCurrentEventInfo()) }
+
+    -- Only track events involving known players
+    local sourcePlayer = currentMatch.players[sourceGUID]
+    local destPlayer   = currentMatch.players[destGUID]
+
+    -- If neither source nor dest is a tracked player, try to add them
+    if not sourcePlayer and not destPlayer then
+        -- Try to discover new arena opponents from combat log
+        if sourceGUID and not currentMatch.players[sourceGUID] then
+            local unit = self:FindUnitByGUID(sourceGUID)
+            if unit then
+                local guid, _ = currentMatch:AddPlayer(unit, self:DetermineTeam(unit))
+                if guid then
+                    guidCache[guid] = unit
+                    sourcePlayer = currentMatch.players[guid]
+                end
+            end
+        end
+        if destGUID and not currentMatch.players[destGUID] then
+            local unit = self:FindUnitByGUID(destGUID)
+            if unit then
+                local guid, _ = currentMatch:AddPlayer(unit, self:DetermineTeam(unit))
+                if guid then
+                    guidCache[guid] = unit
+                    destPlayer = currentMatch.players[guid]
+                end
+            end
+        end
+    end
+
+    if not sourcePlayer and not destPlayer then return end
+
+    local elapsed = GetTime() - arenaStartTime
+    local sourceID = sourcePlayer and sourcePlayer.ID or -1
+    local destID   = destPlayer and destPlayer.ID or -1
+
+    ----------------------------------------------------
+    -- Damage events
+    ----------------------------------------------------
+    if subevent == "SWING_DAMAGE" then
+        local amount = args[1] or 0
+        local overkill = args[2] or 0
+        local critical = args[7] and 1 or 0
+        if destPlayer then
+            currentMatch:AddStats(1, destGUID, amount, "Melee")
+            local msg = string.format("%f,D,%d,%d,%d,0,%d", elapsed, sourceID, destID, amount, critical)
+            currentMatch:RecordEvent(msg)
+            AR_Comm:BroadcastEvent(msg)
+        end
+
+    elseif subevent == "SPELL_DAMAGE" or subevent == "SPELL_PERIODIC_DAMAGE" or subevent == "RANGE_DAMAGE" then
+        local spellID   = args[1] or 0
+        local spellName = args[2] or "Unknown"
+        local amount    = args[4] or 0
+        local critical  = args[10] and 1 or 0
+        if destPlayer then
+            currentMatch:AddStats(1, destGUID, amount, spellName)
+            local msg = string.format("%f,D,%d,%d,%d,%d,%d", elapsed, sourceID, destID, amount, spellID, critical)
+            currentMatch:RecordEvent(msg)
+            AR_Comm:BroadcastEvent(msg)
+        end
+
+        -- Track cooldowns from damage spells
+        if sourcePlayer and spellID and AR.Data.COOLDOWN_SPELLS[spellID] then
+            local cdMsg = string.format("%f,CD,%d,%d,%d", elapsed, sourceID, spellID, AR.Data.COOLDOWN_SPELLS[spellID])
+            currentMatch:RecordEvent(cdMsg)
+        end
+
+    ----------------------------------------------------
+    -- Healing events
+    ----------------------------------------------------
+    elseif subevent == "SPELL_HEAL" or subevent == "SPELL_PERIODIC_HEAL" then
+        local spellID   = args[1] or 0
+        local spellName = args[2] or "Unknown"
+        local amount    = args[4] or 0
+        local critical  = args[7] and 1 or 0
+        if destPlayer then
+            currentMatch:AddStats(2, destGUID, amount, spellName)
+            local msg = string.format("%f,H,%d,%d,%d,%d,%d", elapsed, sourceID, destID, amount, spellID, critical)
+            currentMatch:RecordEvent(msg)
+            AR_Comm:BroadcastEvent(msg)
+        end
+
+    ----------------------------------------------------
+    -- Spell cast events
+    ----------------------------------------------------
+    elseif subevent == "SPELL_CAST_START" then
+        local spellID = args[1] or 0
+        if sourcePlayer and spellID > 0 then
+            local msg = string.format("%f,SC,%d,%d,1", elapsed, sourceID, spellID)
+            currentMatch:RecordEvent(msg)
+            AR_Comm:BroadcastEvent(msg)
+        end
+
+    elseif subevent == "SPELL_CAST_SUCCESS" then
+        local spellID = args[1] or 0
+        if sourcePlayer and spellID > 0 then
+            local msg = string.format("%f,SC,%d,%d,0", elapsed, sourceID, spellID)
+            currentMatch:RecordEvent(msg)
+            AR_Comm:BroadcastEvent(msg)
+
+            -- Track cooldowns
+            if AR.Data.COOLDOWN_SPELLS[spellID] then
+                local cdMsg = string.format("%f,CD,%d,%d,%d", elapsed, sourceID, spellID, AR.Data.COOLDOWN_SPELLS[spellID])
+                currentMatch:RecordEvent(cdMsg)
+            end
+        end
+
+    ----------------------------------------------------
+    -- Aura events (from combat log)
+    ----------------------------------------------------
+    elseif subevent == "SPELL_AURA_APPLIED" then
+        local spellID  = args[1] or 0
+        local auraType = (args[4] == "BUFF") and 1 or 2
+        if destPlayer and spellID > 0 then
+            local msg = string.format("%f,AA,%d,%d,%d,0", elapsed, destID, spellID, auraType)
+            currentMatch:RecordEvent(msg)
+            AR_Comm:BroadcastEvent(msg)
+        end
+
+    elseif subevent == "SPELL_AURA_REMOVED" then
+        local spellID  = args[1] or 0
+        local auraType = (args[4] == "BUFF") and 1 or 2
+        if destPlayer and spellID > 0 then
+            local msg = string.format("%f,AR,%d,%d,%d", elapsed, destID, spellID, auraType)
+            currentMatch:RecordEvent(msg)
+            AR_Comm:BroadcastEvent(msg)
+        end
+
+    ----------------------------------------------------
+    -- Interrupt
+    ----------------------------------------------------
+    elseif subevent == "SPELL_INTERRUPT" then
+        local spellID         = args[1] or 0
+        local interruptedID   = args[4] or 0
+        if destPlayer then
+            local msg = string.format("%f,I,%d,%d,%d", elapsed, sourceID, destID, interruptedID)
+            currentMatch:RecordEvent(msg)
+            AR_Comm:BroadcastEvent(msg)
+        end
+
+    ----------------------------------------------------
+    -- Death
+    ----------------------------------------------------
+    elseif subevent == "UNIT_DIED" then
+        if destPlayer then
+            local msg = string.format("%f,X,%d", elapsed, destID)
+            currentMatch:RecordEvent(msg)
+            AR_Comm:BroadcastEvent(msg)
+        end
+    end
+end
+
+------------------------------------------------------------
+-- Helper: find unit ID from GUID
+------------------------------------------------------------
+function ArenaReplay:FindUnitByGUID(guid)
+    if guidCache[guid] then
+        return guidCache[guid]
+    end
+    local units = { "player", "party1", "party2", "party3", "party4",
+                    "arena1", "arena2", "arena3", "arena4", "arena5" }
+    for _, unit in ipairs(units) do
+        if UnitGUID(unit) == guid then
+            guidCache[guid] = unit
+            return unit
+        end
+    end
+    return nil
+end
+
+function ArenaReplay:DetermineTeam(unit)
+    if UnitIsFriend("player", unit) then return 1 end
+    return 0
+end
+
+------------------------------------------------------------
+-- Match end detection
+------------------------------------------------------------
+function ArenaReplay:PVP_MATCH_COMPLETE()
+    if not currentMatch or not isInArena then return end
+    self:ReadScoreboard()
+    self:FinalizeMatch()
+end
+
+function ArenaReplay:UPDATE_BATTLEFIELD_SCORE()
+    -- Also fired during arena; backup for PVP_MATCH_COMPLETE
+end
+
+------------------------------------------------------------
+-- Read scoreboard data at match end
+------------------------------------------------------------
+function ArenaReplay:ReadScoreboard()
+    if not currentMatch then return end
+
+    -- Try to read arena team results via C_PvP
+    -- In WoW 12.0, these APIs may be partially restricted
+    local winner = nil
+
+    -- Use GetBattlefieldWinner if available
+    if GetBattlefieldWinner then
+        local ok, result = pcall(GetBattlefieldWinner)
+        if ok then winner = result end
+    end
+
+    -- Read team info
+    for teamIndex = 0, 1 do
+        local ok, name, oldRating, newRating, mmr
+        if GetBattlefieldTeamInfo then
+            ok, name, oldRating, newRating, mmr = pcall(GetBattlefieldTeamInfo, teamIndex)
+            if ok and name then
+                local diff = (newRating or 0) - (oldRating or 0)
+                currentMatch:SetTeam(teamIndex, name, newRating, diff, mmr)
+            end
+        end
+    end
+
+    -- Determine win/loss
+    if winner == 0 then
+        currentMatch.result = 1 -- win (green team = friendly)
+    elseif winner == 1 then
+        currentMatch.result = 2 -- loss
+    else
+        currentMatch.result = 0 -- unknown
+    end
+
+    -- Try to read per-player scoreboard
+    if GetNumBattlefieldScores then
+        local ok, numScores = pcall(GetNumBattlefieldScores)
+        if ok and numScores then
+            for i = 1, numScores do
+                local scoreOk, name, _, _, _, _, _, _, _, _, _, dmg, heal, _, _, _, rating, ratingChange, mmr, spec =
+                    pcall(GetBattlefieldScore, i)
+                if scoreOk and name then
+                    currentMatch:SetPlayerEndData(name, rating, dmg, heal, ratingChange, mmr, spec)
+                end
+            end
+        end
+    end
+end
+
+------------------------------------------------------------
+-- Finalize and save match
+------------------------------------------------------------
+function ArenaReplay:FinalizeMatch()
+    if not currentMatch then return end
+
+    currentMatch.endTime = date("%Y-%m-%d %H:%M:%S")
+    currentMatch:SetMatchEnd()
+    currentMatch:SetBracket()
+
+    -- Don't save empty matches
+    if #currentMatch.data < 5 then
+        currentMatch = nil
+        return
+    end
+
+    -- Insert at the beginning (newest first)
+    table.insert(ArenaReplayDB.matches, 1, {})
+    currentMatch:SaveToVariable(1)
+
+    -- Broadcast end
+    AR_Comm:BroadcastEnd()
+
+    local mapName = AR.Data.ARENA_MAPS[currentMatch.map or 0] or "Unknown"
+    local resultStr = "???"
+    if currentMatch.result == 1 then resultStr = "|cff00ff00WIN|r"
+    elseif currentMatch.result == 2 then resultStr = "|cffff0000LOSS|r"
+    elseif currentMatch.result == 3 then resultStr = "|cffffff00DRAW|r" end
+
+    print("|cffe392c5<ArenaReplay>|r Match saved: " .. mapName ..
+          " (" .. currentMatch.bracket .. "v" .. currentMatch.bracket .. ") - " ..
+          resultStr .. " [" .. AR.Util:FormatTime(currentMatch.elapsed) .. "]")
+
+    AR_TableGUI:RefreshIfShowing()
+    currentMatch = nil
+end
+
+------------------------------------------------------------
+-- Match playback
+------------------------------------------------------------
+function ArenaReplay:PlayMatch(matchIndex)
+    local matchData = ArenaReplayDB.matches[matchIndex]
+    if not matchData then
+        print("|cffe392c5<ArenaReplay>|r " .. L.CONF_NOMATCHES)
+        return
+    end
+
+    if playStub then
+        playStub:Close()
+    end
+
+    playStub = AR_PlayStub:New()
+    playStub:Init(matchData)
+    playStub:Play()
+end
+
+------------------------------------------------------------
+-- Delete a match
+------------------------------------------------------------
+function ArenaReplay:DeleteMatch(matchIndex)
+    if ArenaReplayDB.matches[matchIndex] then
+        table.remove(ArenaReplayDB.matches, matchIndex)
+        AR_TableGUI:RefreshIfShowing()
+        print("|cffe392c5<ArenaReplay>|r " .. L.CONF_MATCH_DELETED)
+    end
+end
