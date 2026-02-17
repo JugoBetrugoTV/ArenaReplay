@@ -2,10 +2,14 @@ local ADDON_NAME, AR = ...
 
 ------------------------------------------------------------
 -- ArenaReplay Core - Main addon logic
--- Multi-version: Midnight, BCC Anniversary, MoP Classic, Classic Era
+-- Multi-version: Midnight, BCC Anniversary, MoP Classic
 ------------------------------------------------------------
 local L = LibStub("AceLocale-3.0"):GetLocale("ArenaReplay", true)
 local Compat = AR.Compat
+
+-- Standalone event frame, created at file-load time in a clean
+-- execution context so it is never tainted by other addons.
+local coreEventFrame = CreateFrame("Frame")
 
 -- Create Ace addon (with AceConsole for slash commands)
 local ArenaReplay = LibStub("AceAddon-3.0"):NewAddon("ArenaReplay",
@@ -200,28 +204,34 @@ function ArenaReplay:OnSlashCommand(input)
 end
 
 function ArenaReplay:OnEnable()
-    -- Register core events (all versions)
-    self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD")
-    self:RegisterEvent("UNIT_HEALTH")
-    self:RegisterEvent("UNIT_MAXHEALTH")
-    self:RegisterEvent("UNIT_AURA")
-    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+    -- Use our own clean event frame (created at file-load time)
+    -- to bypass AceEvent's potentially tainted shared frame.
+    coreEventFrame:SetScript("OnEvent", function(_, event, ...)
+        if ArenaReplay[event] then
+            ArenaReplay[event](ArenaReplay, event, ...)
+        end
+    end)
 
-    -- Arena-specific events (only where arenas exist)
-    if Compat.hasArenas then
-        self:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
-        self:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
-        self:RegisterEvent("ARENA_OPPONENT_UPDATE")
-        self:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
-    end
+    -- Register core events (all versions)
+    coreEventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    coreEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    coreEventFrame:RegisterEvent("UNIT_HEALTH")
+    coreEventFrame:RegisterEvent("UNIT_MAXHEALTH")
+    coreEventFrame:RegisterEvent("UNIT_AURA")
+    coreEventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+
+    -- Arena-specific events (all supported versions have arenas)
+    coreEventFrame:RegisterEvent("CHAT_MSG_BG_SYSTEM_NEUTRAL")
+    coreEventFrame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS")
+    coreEventFrame:RegisterEvent("ARENA_OPPONENT_UPDATE")
+    coreEventFrame:RegisterEvent("UPDATE_BATTLEFIELD_SCORE")
 
     -- Retail-only events
     if Compat.isRetail then
-        self:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
-        self:RegisterEvent("PVP_MATCH_COMPLETE")
-        self:RegisterEvent("LOADING_SCREEN_DISABLED")
-        self:RegisterEvent("PVP_MATCH_STATE_CHANGED")
+        coreEventFrame:RegisterEvent("ARENA_PREP_OPPONENT_SPECIALIZATIONS")
+        coreEventFrame:RegisterEvent("PVP_MATCH_COMPLETE")
+        coreEventFrame:RegisterEvent("LOADING_SCREEN_DISABLED")
+        coreEventFrame:RegisterEvent("PVP_MATCH_STATE_CHANGED")
     end
 
     -- Slash commands via AceConsole
