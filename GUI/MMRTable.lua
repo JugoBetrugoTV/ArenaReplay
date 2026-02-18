@@ -7,6 +7,7 @@ local _, AR = ...
 ------------------------------------------------------------
 AR_MMRTable = {}
 local MMRTable = AR_MMRTable
+local Compat = AR.Compat
 
 -- Map spec names to class tokens for coloring (best effort)
 -- This maps common English spec names; class token stored in game data is preferred
@@ -106,7 +107,7 @@ local TABS = {
 function MMRTable:Create()
     if tableFrame then return end
 
-    tableFrame = CreateFrame("Frame", "ArenaReplayMMRTable", UIParent, "BackdropTemplate")
+    tableFrame = Compat.CreateFrameWithBackdrop("Frame", "ArenaReplayMMRTable", UIParent)
     tableFrame:SetFrameStrata("HIGH")
     tableFrame:SetSize(FRAME_WIDTH, FRAME_HEIGHT)
     tableFrame:SetPoint("CENTER", 0, 0)

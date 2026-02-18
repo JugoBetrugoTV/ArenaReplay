@@ -532,15 +532,24 @@ end
 
 ------------------------------------------------------------
 -- Combat Log Event processing (all versions)
--- In Retail 12.0+, CLEU may have restricted data for enemy actions.
--- We handle this gracefully with nil checks.
+-- Midnight 12.0+: combat log may be restricted (C_CombatLog.IsCombatLogRestricted)
+-- and values may be secret (issecretvalue). We handle this gracefully.
 ------------------------------------------------------------
+local issecretvalue = issecretvalue or function() return false end
+
 function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
     if not currentMatch or not isFighting then return end
 
-    local timestamp, subevent, hideCaster,
+    -- Midnight: skip if combat log is restricted
+    if C_CombatLog and C_CombatLog.IsCombatLogRestricted
+        and C_CombatLog.IsCombatLogRestricted() then
+        return
+    end
+
+    local ok, timestamp, subevent, hideCaster,
           sourceGUID, sourceName, sourceFlags, sourceRaidFlags,
-          destGUID, destName, destFlags, destRaidFlags = CombatLogGetCurrentEventInfo()
+          destGUID, destName, destFlags, destRaidFlags = pcall(CombatLogGetCurrentEventInfo)
+    if not ok then return end
 
     -- Safely extract remaining args (position varies by subevent)
     local args = { select(12, CombatLogGetCurrentEventInfo()) }
@@ -580,12 +589,18 @@ function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
     local sourceID = sourcePlayer and sourcePlayer.ID or -1
     local destID   = destPlayer and destPlayer.ID or -1
 
+    -- Helper: safely read a numeric value (may be secret in Midnight 12.0+)
+    local function safeNum(val, default)
+        if val and type(val) == "number" and not issecretvalue(val) then return val end
+        return default or 0
+    end
+
     ----------------------------------------------------
     -- Damage events
     ----------------------------------------------------
     if subevent == "SWING_DAMAGE" then
-        local amount = args[1] or 0
-        local overkill = args[2] or 0
+        local amount = safeNum(args[1])
+        local overkill = safeNum(args[2])
         local critical = args[7] and 1 or 0
         if destPlayer then
             currentMatch:AddStats(1, destGUID, amount, "Melee")
@@ -595,9 +610,9 @@ function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
         end
 
     elseif subevent == "SPELL_DAMAGE" or subevent == "SPELL_PERIODIC_DAMAGE" or subevent == "RANGE_DAMAGE" then
-        local spellID   = args[1] or 0
+        local spellID   = safeNum(args[1])
         local spellName = args[2] or "Unknown"
-        local amount    = args[4] or 0
+        local amount    = safeNum(args[4])
         local critical  = args[10] and 1 or 0
         if destPlayer then
             currentMatch:AddStats(1, destGUID, amount, spellName)
@@ -616,9 +631,9 @@ function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
     -- Healing events
     ----------------------------------------------------
     elseif subevent == "SPELL_HEAL" or subevent == "SPELL_PERIODIC_HEAL" then
-        local spellID   = args[1] or 0
+        local spellID   = safeNum(args[1])
         local spellName = args[2] or "Unknown"
-        local amount    = args[4] or 0
+        local amount    = safeNum(args[4])
         local critical  = args[7] and 1 or 0
         if destPlayer then
             currentMatch:AddStats(2, destGUID, amount, spellName)
@@ -631,7 +646,7 @@ function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
     -- Spell cast events
     ----------------------------------------------------
     elseif subevent == "SPELL_CAST_START" then
-        local spellID = args[1] or 0
+        local spellID = safeNum(args[1])
         if sourcePlayer and spellID > 0 then
             local msg = string.format("%f,SC,%d,%d,1", elapsed, sourceID, spellID)
             currentMatch:RecordEvent(msg)
@@ -639,7 +654,7 @@ function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
         end
 
     elseif subevent == "SPELL_CAST_SUCCESS" then
-        local spellID = args[1] or 0
+        local spellID = safeNum(args[1])
         if sourcePlayer and spellID > 0 then
             local msg = string.format("%f,SC,%d,%d,0", elapsed, sourceID, spellID)
             currentMatch:RecordEvent(msg)
@@ -656,7 +671,7 @@ function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
     -- Aura events (from combat log)
     ----------------------------------------------------
     elseif subevent == "SPELL_AURA_APPLIED" then
-        local spellID  = args[1] or 0
+        local spellID  = safeNum(args[1])
         local auraType = (args[4] == "BUFF") and 1 or 2
         if destPlayer and spellID > 0 then
             local msg = string.format("%f,AA,%d,%d,%d,0", elapsed, destID, spellID, auraType)
@@ -665,7 +680,7 @@ function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
         end
 
     elseif subevent == "SPELL_AURA_REMOVED" then
-        local spellID  = args[1] or 0
+        local spellID  = safeNum(args[1])
         local auraType = (args[4] == "BUFF") and 1 or 2
         if destPlayer and spellID > 0 then
             local msg = string.format("%f,AR,%d,%d,%d", elapsed, destID, spellID, auraType)
@@ -677,8 +692,8 @@ function ArenaReplay:COMBAT_LOG_EVENT_UNFILTERED()
     -- Interrupt
     ----------------------------------------------------
     elseif subevent == "SPELL_INTERRUPT" then
-        local spellID         = args[1] or 0
-        local interruptedID   = args[4] or 0
+        local spellID         = safeNum(args[1])
+        local interruptedID   = safeNum(args[4])
         if destPlayer then
             local msg = string.format("%f,I,%d,%d,%d", elapsed, sourceID, destID, interruptedID)
             currentMatch:RecordEvent(msg)
@@ -722,6 +737,9 @@ end
 
 ------------------------------------------------------------
 -- Match end detection
+-- Retail: PVP_MATCH_COMPLETE fires reliably.
+-- MoP/BCC: PVP_MATCH_COMPLETE does not exist; detect via
+--   UPDATE_BATTLEFIELD_SCORE with GetBattlefieldWinner().
 ------------------------------------------------------------
 function ArenaReplay:PVP_MATCH_COMPLETE()
     -- Track MMR change (works even if recording is off)
@@ -736,7 +754,17 @@ function ArenaReplay:PVP_MATCH_COMPLETE()
 end
 
 function ArenaReplay:UPDATE_BATTLEFIELD_SCORE()
-    -- Also fired during arena; backup for PVP_MATCH_COMPLETE
+    -- MoP/BCC fallback: detect match end via scoreboard update
+    if Compat.isRetail then return end
+    if not currentMatch or not isInArena or not isFighting then return end
+
+    local winner = Compat.GetBattlefieldWinner()
+    if winner ~= nil then
+        AR_MMRTracker:OnMatchComplete()
+        self:ReadScoreboard()
+        self:FinalizeMatch()
+        AR_MMRDisplay:Update()
+    end
 end
 
 ------------------------------------------------------------
